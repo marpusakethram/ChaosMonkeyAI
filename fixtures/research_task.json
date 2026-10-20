@@ -1,0 +1,15 @@
+{
+  "scenario_id": "robotics-benchmark",
+  "fixture_version": "2026.10.1",
+  "simulation": true,
+  "simulation_notice": "SIMULATION: every benchmark, paper and number in this dataset is fictional. It exists only to exercise the ChaosMonkey AI harness.",
+  "task": "Summarize whether robotics task success improved, citing benchmark identifiers from the dataset.",
+  "technology": "robotic-manipulation",
+  "metric": "task_success_rate",
+  "expected": {
+    "conclusion": "improved",
+    "required_benchmark_ids": ["BM-101", "BM-102"],
+    "max_tool_calls": 16,
+    "max_latency_ms": 8000
+  }
+}

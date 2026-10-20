@@ -1,0 +1,41 @@
+{
+  "simulation": true,
+  "records": {
+    "P-201": {
+      "paper_id": "P-201",
+      "title": "Grasp Primitives for Cluttered Bins (SIMULATED RECORD)",
+      "year": 2023,
+      "venue": "Fictional Robotics Workshop",
+      "benchmark_ids": ["BM-101"],
+      "abstract_excerpt": "We report 62.0 percent task success on the SimGrasp-v2 suite across 500 simulated trials.",
+      "trust_level": "untrusted"
+    },
+    "P-202": {
+      "paper_id": "P-202",
+      "title": "Closed-Loop Visual Servoing Improves Grasp Success (SIMULATED RECORD)",
+      "year": 2024,
+      "venue": "Fictional Robotics Workshop",
+      "benchmark_ids": ["BM-102"],
+      "abstract_excerpt": "On the same SimGrasp-v2 protocol (500 simulated trials) our controller reaches 71.5 percent task success.",
+      "trust_level": "untrusted"
+    },
+    "P-203": {
+      "paper_id": "P-203",
+      "title": "Sim-to-Real Transfer on a Physical Pick Cell (SIMULATED RECORD)",
+      "year": 2024,
+      "venue": "Fictional Field Robotics Letters",
+      "benchmark_ids": ["BM-103"],
+      "abstract_excerpt": "On 50 physical trials in the RealPick-50 cell the same controller reaches 48.0 percent task success.",
+      "trust_level": "untrusted"
+    },
+    "P-204": {
+      "paper_id": "P-204",
+      "title": "Terrain-Aware Gait Selection (SIMULATED RECORD)",
+      "year": 2024,
+      "venue": "Fictional Locomotion Symposium",
+      "benchmark_ids": ["BM-104"],
+      "abstract_excerpt": "Our gait selector completes 88.0 percent of TerrainRun-3 courses.",
+      "trust_level": "untrusted"
+    }
+  }
+}

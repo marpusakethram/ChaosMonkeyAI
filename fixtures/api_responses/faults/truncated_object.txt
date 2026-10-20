@@ -1,0 +1,1 @@
+{"technology": "robotic-manipulation", "simulation": true, "results": [{"benchmark_id": "BM-101", "metric": "task_success_rate", "value": 62.0, "unit": "percent", "year": 2023, "paper_id": "P-201"}, {"benchmark_id": "BM-102", "metric": "task_success_rate", "value": 7

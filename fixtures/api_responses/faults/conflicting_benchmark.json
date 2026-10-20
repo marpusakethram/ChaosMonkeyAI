@@ -1,0 +1,13 @@
+{
+  "add_results": [
+    {
+      "benchmark_id": "BM-103",
+      "metric": "task_success_rate",
+      "value": 48.0,
+      "unit": "percent",
+      "year": 2024,
+      "paper_id": "P-203",
+      "setup": {"suite": "RealPick-50", "environment": "physical", "trials": 50}
+    }
+  ]
+}
