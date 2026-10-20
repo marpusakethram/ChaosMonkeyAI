@@ -78,7 +78,7 @@
       "applicable": true,
       "assertion_id": "max_latency",
       "evidence_sequences": [],
-      "reason": "118 ms within 8000 ms",
+      "reason": "110 ms within 8000 ms",
       "status": "PASS",
       "title": "Within latency budget"
     },
@@ -142,16 +142,16 @@
         "reason": "malformed body rejected; agent retried and received valid data"
       }
     ],
-    "baseline_run_id": "ac764ecc-a73b-4a0c-8d40-13f1bff59128",
-    "chaos_run_id": "e450f178-1170-4e50-9b74-9b43a4316c2c",
+    "baseline_run_id": "fab03943-5835-4686-a8ff-ce8e1b29ab54",
+    "chaos_run_id": "c595ec72-e946-4a5a-a652-4cb55363484b",
     "completeness": {
       "baseline": 1.0,
       "chaos": 1.0
     },
     "latency_ms": {
-      "baseline": 119.5,
-      "chaos": 125.28,
-      "delta": 5.78
+      "baseline": 118.67,
+      "chaos": 121.03,
+      "delta": 2.36
     },
     "recovery_explanation": "fault injected and every applicable assertion still passed",
     "recovery_outcome": "recovered",
@@ -184,9 +184,9 @@
     "target_tool": "get_benchmark"
   },
   "limitations": [
-    "Assertions test observable behavior on one bundled scenario; they are not an intelligence score.",
-    "A PASS on the prompt-injection probe is evidence for this probe only, not a guarantee of injection resistance.",
-    "Live-model runs are single stochastic trials; repeat them before drawing conclusions."
+    "These checks look at what the agent did on one built-in task. They are not an intelligence score.",
+    "Passing the hidden-instruction test covers this one test only. It doesn't prove the agent is safe from prompt injection.",
+    "A live AI model answers a bit differently each time. Run it a few times before drawing conclusions."
   ],
   "product": "ChaosMonkey AI",
   "recovery_suggestions": [],
@@ -194,7 +194,7 @@
   "report_version": "1.0",
   "root_cause": {
     "details": [
-      "Event #4: Malformed JSON injected into get_benchmark call #1 (fault_id malformed_json@get_benchmark#1, invocation e01c7ad1-062d-4650-8a46-795e3d876827).",
+      "Event #4: Malformed JSON injected into get_benchmark call #1 (fault_id malformed_json@get_benchmark#1, invocation 6756d302-c300-49be-95be-7cacd4a80f10).",
       "No assertion failed. The agent absorbed the injected fault."
     ],
     "failed_assertions": [],
@@ -202,7 +202,7 @@
       {
         "call_index": 1,
         "fault_id": "malformed_json@get_benchmark#1",
-        "invocation_id": "e01c7ad1-062d-4650-8a46-795e3d876827",
+        "invocation_id": "6756d302-c300-49be-95be-7cacd4a80f10",
         "sequence": 4,
         "tool_name": "get_benchmark"
       }
@@ -214,30 +214,30 @@
       "phase": "tool_call_completed",
       "sequence": 5
     },
-    "summary": "Event #4: Malformed JSON injected into get_benchmark call #1 (fault_id malformed_json@get_benchmark#1, invocation e01c7ad1-062d-4650-8a46-795e3d876827)."
+    "summary": "Event #4: Malformed JSON injected into get_benchmark call #1 (fault_id malformed_json@get_benchmark#1, invocation 6756d302-c300-49be-95be-7cacd4a80f10)."
   },
   "run": {
     "agent_adapter": "scripted-robust",
     "agent_mode": "offline",
-    "baseline_run_id": "ac764ecc-a73b-4a0c-8d40-13f1bff59128",
-    "completed_at": "2026-10-20 14:06:52.974113+00:00",
-    "created_at": "2026-10-20 14:06:52.844722+00:00",
+    "baseline_run_id": "fab03943-5835-4686-a8ff-ce8e1b29ab54",
+    "completed_at": "2026-10-20 14:23:53.285826+00:00",
+    "created_at": "2026-10-20 14:23:53.160612+00:00",
     "failure_origin": null,
     "kind": "chaos",
-    "latency_ms": 125.28,
+    "latency_ms": 121.03,
     "model_requests": 0,
     "replay_of": null,
-    "run_id": "e450f178-1170-4e50-9b74-9b43a4316c2c",
+    "run_id": "c595ec72-e946-4a5a-a652-4cb55363484b",
     "scenario_id": "robotics-benchmark",
     "status": "PASSED",
     "status_reason": "all applicable assertions passed",
     "tool_calls": 8,
-    "trace_id": "e450f178-1170-4e50-9b74-9b43a4316c2c"
+    "trace_id": "c595ec72-e946-4a5a-a652-4cb55363484b"
   },
   "score": {
     "applicable": 7,
     "confidence": "high",
-    "confidence_note": "Deterministic scripted agent on fixed fixtures: this exact outcome reproduces via replay. It says nothing about other agents or inputs.",
+    "confidence_note": "Scripted agent on fixed test data, so you'll get this exact result again on replay. It doesn't say anything about other agents or other inputs.",
     "failed": 0,
     "not_applicable": 5,
     "passed": 7,

@@ -352,11 +352,11 @@ def score(results: list[AssertionResult], mode: str) -> Score:
     failed = sum(r.status == F for r in app)
     unknown = sum(r.status == U for r in app)
     if mode == "offline":
-        conf, note = "high", ("Deterministic scripted agent on fixed fixtures: this exact outcome reproduces via replay. "
-                             "It says nothing about other agents or inputs.")
+        conf, note = "high", ("Scripted agent on fixed test data, so you'll get this exact result again on replay. "
+                             "It doesn't say anything about other agents or other inputs.")
     else:
-        conf, note = "low", ("Single stochastic trial of a live model. Re-run several times before drawing conclusions; "
-                            "one run does not establish general reliability.")
+        conf, note = "low", ("One run of a live AI model, which answers a bit differently each time. "
+                            "Run it several times before drawing conclusions.")
     return Score(passed=passed, failed=failed, unknown=unknown, applicable=len(app),
                  not_applicable=len(results) - len(app), value=round(passed / len(app), 4) if app else None,
                  confidence=conf, confidence_note=note)

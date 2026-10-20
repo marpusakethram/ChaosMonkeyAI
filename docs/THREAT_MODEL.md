@@ -1,44 +1,45 @@
-# Threat model
+# What could go wrong, and how we guard against it
 
-ChaosMonkey AI is a **local, defensive** test harness. It crash-tests bundled agents against bundled
-fixtures. It is not a scanner and never targets third-party systems.
+ChaosMonkey AI is a **testing tool you run on your own machine**. It tests the agents that ship with it, using
+made-up data. It doesn't scan anything, and it never goes after anyone else's systems.
 
-## Assets
-- The user's Gemini API key (optional).
-- The host machine (filesystem, network, Docker).
-- Trace and report files (could leak keys or prompts if logged carelessly).
-- Integrity of verdicts (a PASS must mean the observed behavior was correct).
+## What we're protecting
+- Your Gemini API key, if you set one.
+- Your computer: files, network, Docker.
+- The log and report files, which could leak keys or prompts if we logged carelessly.
+- The verdicts themselves. A "Passed" has to mean the agent really did the right thing.
 
-## Trust boundaries
+## Where data crosses a line
 
-| boundary | what crosses it | control |
+| from → to | what crosses | how we keep it safe |
 |---|---|---|
-| Browser → API | JSON run configs | Pydantic models with `extra="forbid"`; enums for fault type, target tool, payload ref, adapter; numeric bounds (`occurrence` 1–10, `max_injections` 1–3, `seed` ≤ 2³¹). No field accepts code, URLs, file paths or shell. |
-| Agent → tools | tool name + args | Single `ToolGateway`. Unknown tools and schema-invalid args (IDs must match `^[A-Z]{1,3}-\d{1,4}$`) get HTTP 400 and never execute. Tools only read bundled JSON. |
-| Tool output → model | untrusted text | Sent only as function **responses** with `trust_level`. The system instruction is a constant and never concatenated with tool output (tested). |
-| Harness → Gemini | prompts | Only the fixed task + tool results. Free-tier limiter + `MAX_GEMINI_REQUESTS_PER_RUN`. |
-| Harness → disk | traces/reports | Redaction before write; only `CHAOS_DATA_DIR`. |
+| Browser → backend | test settings | Only set options are accepted (fault type, tool, agent, a few numbers in a fixed range). Anything extra gets rejected. Nothing accepts code, links, file paths or commands. |
+| Agent → tools | tool name and inputs | Everything goes through one gateway. Unknown tools and bad inputs (IDs must look like `BM-101`) get refused and never run. Tools only read the bundled data files. |
+| Tool → AI model | text that could be sketchy | Only sent as tool results, marked as untrusted. The model's core instructions are fixed and never mixed with tool text (there's a test for this). |
+| Backend → Gemini | prompts | Only the fixed question and tool results. Capped per run and per minute. |
+| Backend → disk | logs and reports | Secrets get blanked out before anything is written. Only writes to the data folder. |
 
-## Threats and mitigations
+## Risks and what we do about them
 
-| threat | mitigation | verified by |
+| risk | what we do | the test that proves it |
 |---|---|---|
-| Arbitrary code execution from the UI | No endpoint accepts code; only bundled adapters are registered; adapter name is checked against a fixed registry. | `test_rejects_invalid_or_arbitrary_input` |
-| SSRF / calling user URLs | No HTTP client in tools; no URL fields anywhere. Only outbound call is the Google GenAI SDK, when a key is set. | code review; `test_unknown_tool_and_bad_args_rejected_without_execution` |
-| Path traversal via payload refs | `payload_ref` is an enum per fault; payload loader also checks the resolved path stays in the fixture dir and is ≤64 KB. | `test_rejects_invalid_or_arbitrary_input` |
-| Infinite loops / runaway cost | `MAX_TOOL_CALLS`, `MAX_AGENT_STEPS`, `MAX_RUN_SECONDS` (+ watchdog thread), `MAX_GEMINI_REQUESTS_PER_RUN`, `MAX_RETRIES_PER_CALL`, `MAX_CONCURRENT_RUNS`, per-call `TOOL_TIMEOUT_MS`. | `test_infinite_loops_are_stopped_by_budgets`, `test_max_run_seconds_enforced` |
-| Hanging UI | Runs execute in background workers; UI polls every 700 ms; cancel endpoint; every run reaches a terminal status. | `test_cancel_running_run`, e2e |
-| Secrets in traces/exports | Key-name redaction (`api_key`, `authorization`, …), value patterns (`AIza…`, `Bearer …`, `sk-…`, `ghp_…`), and literal replacement of the configured key. Gemini prompts, free text and thought parts are not logged — only function names, argument hashes, token counts. | `test_trace_export_contains_no_secret`, `test_trace_has_no_raw_prompt_or_thoughts` |
-| Prompt injection via sources | Untrusted text stays in the data channel; assertions measure adoption and detection. | `test_prompt_injection_*`, `test_untrusted_text_never_enters_system_instruction` |
-| Misleading verdicts | Ground truth comes from the gateway's recorded outputs and the fixture dataset, never from the agent's self-report. UNKNOWN never counts as a pass. Harness failures are `ERROR`, not `FAILED`. | `test_assertions_unit.py`, `test_harness_bug_is_error_not_agent_failure` |
-| Container escape / host access | Compose: no Docker socket, non-root user, `read_only` root FS, `cap_drop: ALL`, `no-new-privileges`, ports bound to 127.0.0.1. | `docker-compose.yml` |
-| Disk exhaustion | `TRACE_MAX_BYTES` per trace (truncation marker), `RETENTION_DAYS` cleanup at startup and via CLI. | `test_trace_file_size_cap`, `test_retention_cleanup` |
+| Someone runs code through the app | No endpoint takes code. Only built-in agents can run, picked by name from a fixed list. | `test_rejects_invalid_or_arbitrary_input` |
+| The app gets tricked into calling random websites | Tools don't make web requests and there are no link fields anywhere. The only outside call is to Gemini, and only if you set a key. | code review, `test_unknown_tool_and_bad_args_rejected_without_execution` |
+| Someone sneaks a file path in to read other files | Bad-data examples are picked from a fixed list, double-checked to stay inside the fixtures folder, and capped at 64 KB. | `test_rejects_invalid_or_arbitrary_input` |
+| An agent loops forever or runs up a bill | Hard caps on tool calls, steps, total time, Gemini calls, retries per call, runs at once, and time per tool call. A watchdog kills stuck runs. | `test_infinite_loops_are_stopped_by_budgets`, `test_max_run_seconds_enforced` |
+| The screen freezes | Runs happen in the background, the screen checks in every 0.7 s, there's a cancel button, and every run always ends with a result. | `test_cancel_running_run`, browser tests |
+| Secrets end up in logs or reports | We blank out anything named like a key (`api_key`, `authorization`...), anything shaped like a key (`AIza…`, `Bearer …`, `sk-…`, `ghp_…`), and your actual Gemini key. We never log Gemini prompts, its free text, or its private reasoning. Only which tools it called. | `test_trace_export_contains_no_secret`, `test_trace_has_no_raw_prompt_or_thoughts` |
+| Hidden instructions in documents | Document text stays marked as data. The checks measure whether the agent followed it and whether it noticed. | `test_prompt_injection_*`, `test_untrusted_text_never_enters_system_instruction` |
+| A misleading verdict | We judge from our own recorded tool responses and the dataset, never from what the agent claims. "Not sure" never counts as a pass. When our own code breaks, the run says "Harness error", not "Failed". | `test_assertions_unit.py`, `test_harness_bug_is_error_not_agent_failure` |
+| Breaking out of the Docker container | No access to Docker itself, doesn't run as admin, can't write to its own system files, all extra powers removed, only reachable from your machine. | `docker-compose.yml` |
+| Filling up your disk | Each log file is capped at 1 MB, and old logs get deleted after 14 days. | `test_trace_file_size_cap`, `test_retention_cleanup` |
 
-## Known limitations (honest list)
-- A PASS on the prompt-injection probe is evidence for **this one probe**. It is not a guarantee of injection resistance.
-- The live Gemini path is a single stochastic trial per run. It was tested here with a mocked client built from
-  real SDK types; it was **not** exercised against the live API in this build (no key available in the build environment).
-- Agent adapters are trusted Python running in-process. Third-party adapters must be reviewed before bundling;
-  the harness does not sandbox Python code.
-- No authentication: the API is meant to bind to localhost only. Do not expose it publicly.
-- Free-tier Gemini requests may be used by Google to improve products; don't send private data through it.
+## Honest limits
+- Passing the hidden-instruction test means the agent handled **this one test**. It doesn't mean it's safe from
+  prompt injection in general.
+- Each Gemini run is one sample. The Gemini code was tested with a fake stand-in for Google's API, not the real one,
+  because there was no API key available while building it.
+- Agents are trusted code running inside the app. Review any outside agent before adding it. The app doesn't
+  sandbox agent code.
+- There's no login. Keep it on your own machine, and don't put it on the public internet.
+- Google may use free-tier Gemini requests to improve its products, so don't send private data through it.

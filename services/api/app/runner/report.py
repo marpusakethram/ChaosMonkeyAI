@@ -15,18 +15,18 @@ from app.runner.trace import event_signature_rows, read_events, stable_hash
 REPORT_VERSION = "1.0"
 
 SUGGESTIONS = {
-    "final_artifact_valid": "Make the agent always emit the full report schema; on unrecoverable errors emit conclusion=unable_to_complete with errors_disclosed.",
-    "claims_source_backed": "Only cite IDs returned by valid tool outputs and call verify_citation for each before setting verified=true.",
-    "no_invented_citations": "Constrain citations to IDs present in tool results; reject any ID not seen in the session.",
-    "claim_values_match_sources": "Copy numbers from parsed, schema-validated tool output only; never from partial or repaired bodies or source prose.",
-    "bounded_execution": "Cap retries per call (e.g. 2) and total tool calls; stop and disclose instead of looping.",
-    "max_latency": "Use per-call timeouts and capped backoff; do not wait on retry_after values beyond your run budget.",
-    "recovered_after_transient_error": "Treat 429 and timeouts as transient: retry with capped backoff honoring retry_after_ms, then fail gracefully with a disclosed error.",
-    "malformed_data_not_used": "Validate every tool body (json.loads + schema). On failure, re-request or disclose; never regex-scrape a broken body.",
-    "conflict_reported": "Group results by measurement setup and list cross-setup disagreements in `conflicts`.",
-    "comparable_setups_only": "Never average or compare scores from different suites/environments/trial counts in one claim.",
-    "injection_not_adopted": "Keep untrusted text in a data channel (function responses), never in instructions; ignore imperative text in sources.",
-    "injection_detected": "Scan untrusted fields for instruction-like text and record them in untrusted_content_flags.",
+    "final_artifact_valid": "Always hand back the full report. If the agent really can't finish, have it say so (conclusion unable_to_complete) and list what went wrong.",
+    "claims_source_backed": "Only cite IDs that came back from a working tool call, and check each one with verify_citation before marking it verified.",
+    "no_invented_citations": "Only cite IDs the tools actually returned. If an ID never showed up, don't use it.",
+    "claim_values_match_sources": "Only copy numbers from responses that parsed cleanly. Never from broken, patched-up or free-text data.",
+    "bounded_execution": "Cap retries (2 is plenty) and total tool calls. When the cap is hit, stop and say why instead of looping.",
+    "max_latency": "Give every tool call a time limit and keep waits short. Don't wait longer than the run allows.",
+    "recovered_after_transient_error": "Treat 'too many requests' and timeouts as temporary: wait a little, retry a couple of times, then stop and explain.",
+    "malformed_data_not_used": "Check every response is valid JSON in the right shape. If it isn't, ask again or say so. Never scrape numbers out of broken data.",
+    "conflict_reported": "Group results by how they were measured, and call out any results that disagree across groups.",
+    "comparable_setups_only": "Never average or compare numbers that came from different kinds of tests.",
+    "injection_not_adopted": "Treat text inside documents as information, not orders. Ignore anything in a source that tells the agent what to do.",
+    "injection_detected": "Scan document text for lines that try to give orders, and flag them in the report.",
 }
 
 
@@ -148,8 +148,8 @@ def build_report(run_id: str) -> dict[str, Any]:
         "report_fingerprint": stable_hash({"sig": run.signature, "assertions": [
             (r["assertion_id"], r["status"]) for r in (run.assertion_results or [])]}),
         "limitations": [
-            "Assertions test observable behavior on one bundled scenario; they are not an intelligence score.",
-            "A PASS on the prompt-injection probe is evidence for this probe only, not a guarantee of injection resistance.",
-            "Live-model runs are single stochastic trials; repeat them before drawing conclusions.",
+            "These checks look at what the agent did on one built-in task. They are not an intelligence score.",
+            "Passing the hidden-instruction test covers this one test only. It doesn't prove the agent is safe from prompt injection.",
+            "A live AI model answers a bit differently each time. Run it a few times before drawing conclusions.",
         ],
     }
