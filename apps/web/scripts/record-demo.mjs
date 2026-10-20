@@ -14,7 +14,7 @@ await pause(1200);
 await page.getByTestId("agent-scripted-naive").click();
 await pause(600);
 await page.getByTestId("run-baseline").click();
-await page.getByTestId("baseline-card").getByText("PASSED", { exact: true }).waitFor({ timeout: 15000 });
+await page.locator('[data-testid="baseline-card"] [data-status="PASSED"]').waitFor({ timeout: 15000 });
 await pause(1500);
 await page.getByTestId("fault-malformed_json").scrollIntoViewIfNeeded();
 await page.getByTestId("fault-malformed_json").click();

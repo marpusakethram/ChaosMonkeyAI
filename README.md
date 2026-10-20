@@ -24,7 +24,12 @@ recover, and export a deterministic reliability report.
 
 | | |
 |---|---|
-| ![Home](docs/img/home.png) | ![Robust agent survives a prompt-injection probe](docs/img/run-recovered.png) |
+| ![Configure a crash test: agent, fault, injection point, with a test summary rail](docs/img/home.png) | ![Verdict: the fragile agent kept going on bad data](docs/img/run-failed.png) |
+| ![Checks with reasons, baseline comparison and fix suggestions](docs/img/run-checks.png) | ![The careful agent absorbs a prompt-injection probe](docs/img/run-recovered.png) |
+
+**UI language:** light canvas, pill controls, and a sticky "Test summary" panel, following Meta's commerce design
+system. Color carries meaning: **purple** marks a fault we injected on purpose, **red** marks something that broke,
+**green** marks a check that held or a recovery. Every run opens with a plain-language verdict.
 
 All data is **fictional and labelled SIMULATION** (`fixtures/`). Nothing touches third-party systems.
 
@@ -141,9 +146,9 @@ Details: [docs/EVALUATION.md](docs/EVALUATION.md) (deterministic vs stochastic),
 ## Architecture
 
 ```
-apps/web (Next.js 15 + TS + Tailwind, shadcn-style ui/)      services/api (FastAPI + Pydantic + SQLModel)
+apps/web (Next.js 15 + TS + Tailwind, shadcn-style ui/)     services/api (FastAPI + Pydantic + SQLModel)
   /            task, agent, fault picker  ── /api/v1 ──▶      runner/orchestrator.py   lifecycle, watchdog, status
-  /runs/[id]   split timelines, diff, report                  runner/gateway.py        ONLY path to tools: validation,
+  /runs, /runs/[id]  history, verdict, traces                 runner/gateway.py        ONLY path to tools: validation,
                                                                                         budgets, fault injection, timeout
                                                               faults/*.py              5 faults, deterministic schedule
                                                               agents/reference_agent   scripted robust + naive

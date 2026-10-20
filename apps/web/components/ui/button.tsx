@@ -2,20 +2,21 @@ import { cva, type VariantProps } from "class-variance-authority";
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
+// Pills always (Meta signature). Cobalt = the action that runs something; ink = strong secondary.
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fault/60 disabled:pointer-events-none disabled:opacity-40",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full text-body-sm font-bold transition-colors disabled:cursor-not-allowed disabled:border-transparent disabled:bg-[#bcc0c4] disabled:text-white",
   {
     variants: {
       variant: {
-        default: "bg-graphite-100 text-graphite-950 hover:bg-white",
-        fault: "bg-fault text-graphite-950 hover:bg-[#ffa04a]",
-        outline: "border border-graphite-600 bg-transparent text-graphite-100 hover:bg-graphite-800",
-        ghost: "text-graphite-300 hover:bg-graphite-800 hover:text-graphite-100",
-        danger: "border border-danger/50 text-danger hover:bg-danger-dim",
+        primary: "bg-cobalt text-white hover:bg-cobalt-deep",
+        ink: "bg-ink-deep text-white hover:bg-ink-charcoal",
+        outline: "border-2 border-ink-deep bg-transparent text-ink-deep hover:bg-cloud",
+        ghost: "border-2 border-[rgba(10,19,23,0.12)] bg-transparent text-ink-deep hover:bg-cloud",
+        danger: "border-2 border-fail bg-transparent text-fail-text hover:bg-fail-tint",
       },
-      size: { default: "h-9 px-4", sm: "h-8 px-3 text-xs", lg: "h-11 px-6 text-base" },
+      size: { sm: "h-9 px-4", md: "h-11 px-[30px]", lg: "h-12 px-8 text-body" },
     },
-    defaultVariants: { variant: "default", size: "default" },
+    defaultVariants: { variant: "primary", size: "md" },
   },
 );
 
@@ -27,3 +28,5 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({ classN
   <button ref={ref} className={cn(buttonVariants({ variant, size }), className)} {...props} />
 ));
 Button.displayName = "Button";
+
+export { buttonVariants };

@@ -1,36 +1,44 @@
 import type { Config } from "tailwindcss";
 
+// Tokens follow Meta's light commerce system: white canvas, pill controls, hairline-only depth.
+// Semantic trio: inject (we did this on purpose), fail (it broke), pass (it held / recovered).
 export default {
   content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
-        graphite: {
-          950: "#0a0b0d",
-          900: "#111317",
-          850: "#16191e",
-          800: "#1c2026",
-          700: "#272c34",
-          600: "#353b45",
-          500: "#4a515d",
-          400: "#6b7380",
-          300: "#9aa1ad",
-          200: "#c6cbd3",
-          100: "#e6e8ec",
+        canvas: "#ffffff",
+        cloud: "#f1f4f7",
+        ink: {
+          deep: "#0a1317",
+          DEFAULT: "#1c1e21",
+          charcoal: "#444950",
+          steel: "#5d6c7b",
+          stone: "#8595a4",
         },
-        fault: { DEFAULT: "#ff8a1f", dim: "#ff8a1f26" },
-        recover: { DEFAULT: "#35d07f", dim: "#35d07f22" },
-        danger: { DEFAULT: "#ff4d5e", dim: "#ff4d5e22" },
-        unknown: { DEFAULT: "#e7c14b", dim: "#e7c14b22" },
+        line: { DEFAULT: "#ced0d4", soft: "#dee3e9" },
+        cobalt: { DEFAULT: "#0064e0", deep: "#0457cb", tint: "#e8f1fd" },
+        inject: { DEFAULT: "#a121ce", tint: "#f7ecfb" },
+        fail: { DEFAULT: "#e41e3f", text: "#c4122f", tint: "#fdecef" },
+        pass: { DEFAULT: "#1f7a35", tint: "#e8f5eb" },
+        attention: { DEFAULT: "#f2a918", tint: "#fef6e4" },
       },
       fontFamily: {
-        sans: ["ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "Roboto", "sans-serif"],
-        mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "monospace"],
+        sans: ['"Figtree Variable"', "Montserrat", "Helvetica", "Arial", "sans-serif"],
+        mono: ["ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
       },
-      keyframes: {
-        rise: { "0%": { opacity: "0", transform: "translateY(4px)" }, "100%": { opacity: "1", transform: "none" } },
+      fontSize: {
+        caption: ["12px", { lineHeight: "16px" }],
+        "body-sm": ["14px", { lineHeight: "20px", letterSpacing: "-0.14px" }],
+        body: ["16px", { lineHeight: "24px", letterSpacing: "-0.16px" }],
+        subtitle: ["18px", { lineHeight: "26px" }],
+        "heading-sm": ["24px", { lineHeight: "30px" }],
+        "heading-md": ["28px", { lineHeight: "34px" }],
+        "heading-lg": ["36px", { lineHeight: "46px" }],
+        display: ["48px", { lineHeight: "56px" }],
       },
-      animation: { rise: "rise 260ms ease-out both" },
+      borderRadius: { xl: "16px", "2xl": "24px", "3xl": "32px" },
+      maxWidth: { page: "1280px" },
     },
   },
   plugins: [],

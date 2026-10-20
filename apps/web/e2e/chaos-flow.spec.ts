@@ -8,12 +8,12 @@ import fs from "node:fs";
 test("baseline, inject malformed JSON, compare traces, download report", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByTestId("task-text")).toContainText("robotics task success");
-  await expect(page.getByTestId("mode-badge")).toContainText("Offline fixture mode");
+  await expect(page.getByTestId("mode-badge")).toContainText("Offline fixtures");
 
   // Use the deliberately fragile agent so the fault produces a visible, honest FAIL.
   await page.getByTestId("agent-scripted-naive").click();
   await page.getByTestId("run-baseline").click();
-  await expect(page.getByTestId("baseline-card").getByTestId("run-status")).toHaveText(/PASSED/, { timeout: 15_000 });
+  await expect(page.getByTestId("baseline-card").getByTestId("run-status")).toHaveAttribute("data-status", "PASSED", { timeout: 15_000 });
 
   await page.getByTestId("fault-malformed_json").click();
   await page.getByTestId("inject-fault").click();
@@ -21,7 +21,7 @@ test("baseline, inject malformed JSON, compare traces, download report", async (
 
   // Status reflects backend events; malformed data was silently used -> agent failure.
   await expect(page.getByTestId("status-reason")).toContainText("malformed_data_not_used", { timeout: 15_000 });
-  await expect(page.getByTestId("fault-badge")).toContainText("malformed_json");
+  await expect(page.getByTestId("fault-badge")).toContainText("Malformed JSON");
   await expect(page.getByTestId("fault-callout")).toContainText("get_benchmark call #1");
 
   // Side-by-side: baseline has no fault marker, chaos has one plus an invalid_json row.
@@ -29,7 +29,7 @@ test("baseline, inject malformed JSON, compare traces, download report", async (
   const baseline = page.getByTestId("baseline-timeline");
   await expect(chaos.locator('[data-kind="fault"]')).toHaveCount(1);
   await expect(baseline.locator('[data-kind="fault"]')).toHaveCount(0);
-  await expect(chaos.getByText("INVALID_JSON", { exact: true })).toBeVisible();
+  await expect(chaos.getByText("Invalid JSON", { exact: true })).toBeVisible();
 
   // Raw event expander.
   await chaos.locator('[data-phase="fault_injected"] button').click();
@@ -57,7 +57,7 @@ test("robust agent recovers from a 429 and the UI shows the green recovery marke
   await page.getByTestId("fault-http_429").click();
   await page.getByTestId("inject-fault").click();
   await page.waitForURL(/\/runs\//);
-  await expect(page.getByTestId("status-reason")).toContainText("all applicable assertions passed", { timeout: 15_000 });
+  await expect(page.getByTestId("status-reason")).toContainText("All checks passed", { timeout: 15_000 });
   await expect(page.getByTestId("chaos-timeline").locator('[data-kind="recover"]').first()).toBeVisible();
   await expect(page.getByTestId("recovery-outcome")).toHaveText("Recovered");
 });

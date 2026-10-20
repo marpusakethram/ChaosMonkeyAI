@@ -1,18 +1,19 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("rounded-xl border border-graphite-700 bg-graphite-900/80", className)} {...props} />;
+/** Flat surface: hairline border, no shadow. Radius steps with hierarchy (16 / 24 / 32). */
+export function Panel({ className, ...props }: React.HTMLAttributes<HTMLElement>) {
+  return <section className={cn("rounded-2xl border border-line-soft bg-canvas", className)} {...props} />;
 }
 
-export function CardHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("flex flex-col gap-1 border-b border-graphite-800 px-5 py-4", className)} {...props} />;
+export function PanelHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return <div className={cn("flex items-center justify-between gap-4 px-6 pb-2 pt-6", className)} {...props} />;
 }
 
-export function CardTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
-  return <h2 className={cn("text-sm font-semibold uppercase tracking-wider text-graphite-200", className)} {...props} />;
+export function PanelTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
+  return <h2 className={cn("text-heading-sm font-medium text-ink-deep", className)} {...props} />;
 }
 
-export function CardContent({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("px-5 py-4", className)} {...props} />;
+export function PanelBody({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return <div className={cn("px-6 pb-6 pt-2", className)} {...props} />;
 }

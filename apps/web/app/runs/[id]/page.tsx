@@ -1,18 +1,18 @@
 "use client";
 
+import { ChevronRight, RotateCcw, Zap } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { DiffPanel } from "@/components/diff-panel";
 import { ErrorBanner } from "@/components/error-banner";
-import { ReportPanel } from "@/components/report-panel";
+import { ChecksList, ReportRail } from "@/components/report-panel";
 import { ModeBadge, StatusBadge } from "@/components/status-badge";
 import { TraceTimeline } from "@/components/trace-timeline";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { api, TERMINAL, type Report, type Run, type TraceEvent } from "@/lib/api";
-import { ms, shortId } from "@/lib/utils";
+import { api, TERMINAL, type Comparison, type Report, type Run, type TraceEvent } from "@/lib/api";
+import { cn, FAULT_NAMES, ms, shortId } from "@/lib/utils";
 
 const POLL_MS = 700;
 
@@ -21,6 +21,8 @@ function useRunStream(id: string | null | undefined, onError: (m: string) => voi
   const [run, setRun] = useState<Run | null>(null);
   const [events, setEvents] = useState<TraceEvent[]>([]);
   const last = useRef(0);
+  const report = useRef(onError);
+  report.current = onError;
 
   useEffect(() => {
     if (!id) return;
@@ -40,7 +42,7 @@ function useRunStream(id: string | null | undefined, onError: (m: string) => voi
         setRun(r);
         if (!TERMINAL.includes(r.status)) timer = setTimeout(tick, POLL_MS);
       } catch (e) {
-        if (!stop) onError((e as Error).message);
+        if (!stop) report.current((e as Error).message);
       }
     };
     tick();
@@ -48,10 +50,28 @@ function useRunStream(id: string | null | undefined, onError: (m: string) => voi
       stop = true;
       clearTimeout(timer);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   return { run, events };
+}
+
+const OUTCOME: Record<Comparison["recovery_outcome"], { tone: "pass" | "attention" | "fail" | "neutral"; label: string; verdict: string }> = {
+  recovered: { tone: "pass", label: "Recovered", verdict: "The agent absorbed the fault." },
+  graceful_failure: { tone: "attention", label: "Graceful failure", verdict: "The agent stopped and said why." },
+  silent_failure: { tone: "fail", label: "Silent failure", verdict: "The agent kept going on bad data." },
+  crashed: { tone: "fail", label: "Crashed", verdict: "The agent fell over on the fault." },
+  not_applicable: { tone: "neutral", label: "Fault never fired", verdict: "The fault never fired." },
+};
+
+function verdictFor(run: Run, report: Report | null): { headline: string; outcome?: (typeof OUTCOME)[keyof typeof OUTCOME] } {
+  if (!TERMINAL.includes(run.status)) return { headline: run.kind === "chaos" ? "Crash test in progress" : "Run in progress" };
+  if (run.status === "ERROR") return { headline: "The test harness failed. This run says nothing about the agent." };
+  if (run.status === "CANCELLED") return { headline: "Cancelled before a verdict." };
+  const outcome = report?.comparison ? OUTCOME[report.comparison.recovery_outcome] : undefined;
+  if (run.kind === "chaos" && outcome) return { headline: outcome.verdict, outcome };
+  if (run.status === "PASSED") return { headline: "Every check passed." };
+  const failed = (run.assertion_results ?? []).filter((a) => a.applicable && a.status !== "PASS").length;
+  return { headline: `The agent missed ${failed} check${failed === 1 ? "" : "s"}.` };
 }
 
 export default function RunPage() {
@@ -63,8 +83,8 @@ export default function RunPage() {
   const { run, events } = useRunStream(id, setError);
   const { run: base, events: baseEvents } = useRunStream(run?.baseline_run_id, setError);
 
-  const done = run && TERMINAL.includes(run.status);
-  const baseDone = !run?.baseline_run_id || (base && TERMINAL.includes(base.status));
+  const done = !!run && TERMINAL.includes(run.status);
+  const baseDone = !run?.baseline_run_id || (!!base && TERMINAL.includes(base.status));
 
   useEffect(() => {
     if (!done || !baseDone) return;
@@ -80,71 +100,88 @@ export default function RunPage() {
 
   const fault = run?.fault_config;
   const faultEvents = events.filter((e) => e.phase === "fault_injected");
+  const kindName = run?.kind === "chaos" ? "Crash test" : run?.kind === "replay" ? "Replay" : "Baseline";
+  const title = fault
+    ? `${FAULT_NAMES[fault.fault_type]} on ${fault.target_tool}, call ${fault.occurrence}${fault.max_injections > 1 ? `–${fault.occurrence + fault.max_injections - 1}` : ""}`
+    : run?.kind === "replay"
+      ? `Replay of ${shortId(run.replay_of)}`
+      : "Clean baseline";
+  const v = run ? verdictFor(run, report) : null;
 
   return (
-    <div className="space-y-5">
-      <Link href="/" className="text-xs text-graphite-400 hover:text-graphite-100">
-        ← back to runs
-      </Link>
+    <div className="space-y-6">
+      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-body-sm text-ink-steel">
+        <Link href="/runs" className="hover:text-ink-deep hover:underline">
+          Run history
+        </Link>
+        <ChevronRight className="h-3.5 w-3.5 text-ink-stone" aria-hidden />
+        <span className="text-ink">
+          {kindName} {shortId(id)}
+        </span>
+      </nav>
+
       <ErrorBanner message={error} onClose={() => setError(null)} />
 
       {!run ? (
-        <p className="text-sm text-graphite-400">Loading run {shortId(id)}…</p>
+        <p className="text-body-sm text-ink-steel">Loading run {shortId(id)}</p>
       ) : (
         <>
-          <section className="flex flex-col gap-4 rounded-xl border border-graphite-700 bg-graphite-900/80 p-5 md:flex-row md:items-center md:justify-between">
-            <div className="min-w-0 space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-xl font-semibold text-graphite-100">
-                  {run.kind === "chaos" ? "Chaos run" : run.kind === "replay" ? "Replay" : "Baseline run"}
-                </h1>
-                <span className="font-mono text-xs text-graphite-500">{run.run_id}</span>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <StatusBadge status={run.status} origin={run.failure_origin} />
-                <ModeBadge mode={run.agent_mode} />
-                <Badge>{run.agent_adapter}</Badge>
-                {fault && (
-                  <Badge tone="fault" data-testid="fault-badge">
-                    ⚡ {fault.fault_type} → {fault.target_tool} #{fault.occurrence}
-                    {fault.max_injections > 1 ? ` ×${fault.max_injections}` : ""}
-                  </Badge>
-                )}
-                {run.replay_of && <Badge>replay of {shortId(run.replay_of)}</Badge>}
-              </div>
-              <p className="break-words text-sm text-graphite-300" data-testid="status-reason">
-                {run.status_reason || "Running…"}
-              </p>
-              {run.failure_origin === "harness" && (
-                <p className="text-xs text-unknown">
-                  Harness error: this run says nothing about the agent. Fix the environment and re-run.
-                </p>
+          <header className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusBadge status={run.status} />
+              <ModeBadge mode={run.agent_mode} />
+              <Badge tone="outline">
+                <span className="font-mono font-normal">{run.agent_adapter}</span>
+              </Badge>
+              {fault && (
+                <Badge tone="inject" data-testid="fault-badge">
+                  <Zap className="h-3 w-3" aria-hidden />
+                  {FAULT_NAMES[fault.fault_type]}
+                </Badge>
               )}
             </div>
-            <div className="flex shrink-0 flex-wrap items-center gap-4">
-              <dl className="grid grid-cols-3 gap-4 font-mono text-xs">
-                <div>
-                  <dt className="text-graphite-500">duration</dt>
-                  <dd className="text-graphite-100">{ms(run.latency_ms)}</dd>
-                </div>
-                <div>
-                  <dt className="text-graphite-500">tool calls</dt>
-                  <dd className="text-graphite-100">{run.tool_calls}</dd>
-                </div>
-                <div>
-                  <dt className="text-graphite-500">seed</dt>
-                  <dd className="text-graphite-100">{run.seed}</dd>
-                </div>
+            <h1 className="text-heading-lg font-medium text-ink-deep">{title}</h1>
+          </header>
+
+          <section
+            key={v?.headline}
+            className="verdict-enter grid gap-8 rounded-3xl bg-ink-deep px-6 py-8 text-white sm:px-10 sm:py-10 lg:grid-cols-[minmax(0,1fr)_auto]"
+            data-testid="verdict"
+          >
+            <div className="min-w-0 space-y-4">
+              {v?.outcome && (
+                <Badge tone={v.outcome.tone} data-testid="recovery-outcome">
+                  {v.outcome.label}
+                </Badge>
+              )}
+              <p className="max-w-3xl text-heading-lg font-medium sm:text-display">{v?.headline}</p>
+              <p className="max-w-3xl break-words text-body-sm text-white/70" data-testid="status-reason">
+                {humanReason(run.status_reason)}
+                {run.failure_origin === "harness" && " Fix the environment and run it again."}
+              </p>
+            </div>
+            <div className="flex flex-col justify-between gap-6 lg:items-end">
+              <dl className="tnum grid grid-cols-3 gap-6 lg:text-right">
+                <Stat label="Checks" value={run.score ? `${run.score.passed}/${run.score.applicable}` : "–"} />
+                <Stat label="Tool calls" value={String(run.tool_calls)} />
+                <Stat label="Duration" value={ms(run.latency_ms)} />
               </dl>
               {!done ? (
-                <Button variant="danger" size="sm" onClick={cancel} data-testid="cancel-run">
-                  Cancel
+                <Button variant="danger" size="sm" onClick={cancel} data-testid="cancel-run" className="border-white/40 text-white hover:bg-white/10">
+                  Cancel run
                 </Button>
               ) : (
                 run.agent_mode === "offline" &&
                 ["PASSED", "FAILED"].includes(run.status) && (
-                  <Button variant="outline" size="sm" onClick={replay} data-testid="replay-run">
-                    Replay deterministically
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={replay}
+                    data-testid="replay-run"
+                    className="border-white/30 text-white hover:bg-white/10"
+                  >
+                    <RotateCcw className="h-4 w-4" aria-hidden />
+                    Replay from recording
                   </Button>
                 )
               )}
@@ -152,71 +189,86 @@ export default function RunPage() {
           </section>
 
           {faultEvents.length > 0 && (
-            <div className="rounded-lg border border-fault/40 bg-fault-dim px-4 py-3 text-sm text-fault" data-testid="fault-callout">
-              {faultEvents.map((f) => (
-                <div key={f.sequence}>
-                  ⚡ Event #{f.sequence}: {f.message} <span className="font-mono text-xs opacity-80">({f.fault_id}, invocation {shortId(f.invocation_id)})</span>
-                </div>
-              ))}
+            <div className="flex items-start gap-3 rounded-xl bg-inject-tint px-5 py-4 text-body-sm text-inject" data-testid="fault-callout">
+              <Zap className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+              <div className="space-y-1">
+                {faultEvents.map((f) => (
+                  <p key={f.sequence}>
+                    <span className="font-bold">{f.message}</span>{" "}
+                    <span className="text-inject/80">
+                      at event {f.sequence}, invocation {shortId(f.invocation_id)}
+                    </span>
+                  </p>
+                ))}
+              </div>
             </div>
           )}
 
-          <div className={run.baseline_run_id ? "grid grid-cols-1 gap-4 xl:grid-cols-2" : ""}>
+          <div className={cn("grid gap-6", run.baseline_run_id && "xl:grid-cols-2")}>
             {run.baseline_run_id && (
               <TraceTimeline
                 testId="baseline-timeline"
                 events={baseEvents}
-                title={
-                  <span className="flex items-center gap-2">
-                    Baseline <span className="font-mono text-xs text-graphite-500">{shortId(run.baseline_run_id)}</span>
-                    {base && <StatusBadge status={base.status} />}
-                  </span>
-                }
+                title="Baseline"
+                status={base && <StatusBadge status={base.status} />}
               />
             )}
             <TraceTimeline
               testId="chaos-timeline"
               events={events}
               highlight={focus}
-              title={
-                <span className="flex items-center gap-2">
-                  {run.kind === "chaos" ? <span className="text-fault">Chaos</span> : "Trace"}
-                  <span className="font-mono text-xs text-graphite-500">{shortId(run.run_id)}</span>
-                  <StatusBadge status={run.status} />
-                </span>
-              }
+              title={run.kind === "chaos" ? "Crash test" : "Trace"}
+              status={<StatusBadge status={run.status} />}
             />
           </div>
 
-          {report?.comparison && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Baseline vs chaos</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <DiffPanel comparison={report.comparison} />
-              </CardContent>
-            </Card>
-          )}
-
           {report ? (
-            <ReportPanel report={report} onFocus={setFocus} />
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+              <div className="min-w-0 space-y-6">
+                {report.comparison && (
+                  <section className="rounded-2xl border border-line-soft px-6 pb-4 pt-6">
+                    <h2 className="text-heading-sm font-medium text-ink-deep">Baseline compared with crash test</h2>
+                    <p className="mt-1 text-body-sm text-ink-steel">{report.comparison.recovery_explanation}</p>
+                    <div className="mt-3">
+                      <DiffPanel comparison={report.comparison} />
+                    </div>
+                  </section>
+                )}
+                <ChecksList report={report} onFocus={setFocus} />
+                {run.artifact && (
+                  <details className="group rounded-2xl border border-line-soft">
+                    <summary className="flex cursor-pointer list-none items-center justify-between px-6 py-5 text-subtitle font-bold text-ink-deep">
+                      Agent&apos;s final report
+                      <ChevronRight className="h-4 w-4 text-ink-stone transition-transform group-open:rotate-90" aria-hidden />
+                    </summary>
+                    <pre className="mx-6 mb-6 max-h-96 overflow-auto rounded-lg bg-cloud p-4 font-mono text-[12px] text-ink-charcoal">
+                      {JSON.stringify(run.artifact, null, 2)}
+                    </pre>
+                  </details>
+                )}
+              </div>
+              <ReportRail report={report} />
+            </div>
           ) : (
-            done && <p className="text-sm text-graphite-400">Building report…</p>
-          )}
-
-          {run.artifact && (
-            <details className="rounded-xl border border-graphite-700 bg-graphite-900/80 p-4">
-              <summary className="cursor-pointer text-sm font-semibold uppercase tracking-wider text-graphite-200">
-                Agent&apos;s final artifact
-              </summary>
-              <pre className="mt-3 max-h-96 overflow-auto rounded-md bg-graphite-950 p-3 font-mono text-[11px] text-graphite-300">
-                {JSON.stringify(run.artifact, null, 2)}
-              </pre>
-            </details>
+            done && <p className="text-body-sm text-ink-steel">Building the report</p>
           )}
         </>
       )}
+    </div>
+  );
+}
+
+function humanReason(reason: string): string {
+  if (!reason) return "Waiting for the agent";
+  if (reason === "all applicable assertions passed") return "All checks passed.";
+  return reason.replace(/^assertions not passed: /, "Failed checks: ");
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-caption text-white/60">{label}</dt>
+      <dd className="text-heading-sm font-medium">{value}</dd>
     </div>
   );
 }

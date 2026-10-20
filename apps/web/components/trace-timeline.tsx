@@ -1,70 +1,75 @@
 "use client";
 
+import { ChevronRight } from "lucide-react";
 import { useState } from "react";
 import type { TraceEvent } from "@/lib/api";
 import { cn, ms } from "@/lib/utils";
 
 type Kind = "fault" | "recover" | "fail" | "pass" | "unknown" | "decision" | "neutral";
 
+const SCHEMA_LABEL: Record<string, string> = {
+  invalid_json: "Invalid JSON",
+  schema_mismatch: "Wrong shape",
+  error_status: "Error response",
+  timeout: "Timed out",
+};
+
 export function classify(e: TraceEvent): { kind: Kind; label: string } {
   const status = e.data?.status as string | undefined;
   switch (e.phase) {
     case "fault_injected":
-      return { kind: "fault", label: "FAULT" };
+      return { kind: "fault", label: "Fault injected" };
     case "tool_call_completed":
-      if (e.output_schema_status !== "valid") return { kind: "fail", label: e.output_schema_status?.toUpperCase() ?? "BAD" };
-      if ((e.retry_index ?? 0) > 0) return { kind: "recover", label: "RECOVERED" };
-      return { kind: "neutral", label: "OK" };
+      if (e.output_schema_status !== "valid")
+        return { kind: "fail", label: SCHEMA_LABEL[e.output_schema_status ?? ""] ?? "Bad response" };
+      if ((e.retry_index ?? 0) > 0) return { kind: "recover", label: "Recovered" };
+      return { kind: "neutral", label: "Response" };
     case "tool_call_failed":
-      return { kind: "fail", label: e.exception_type ?? "FAILED" };
+      return { kind: "fail", label: e.exception_type === "ToolTimeoutError" ? "Timed out" : "Call failed" };
     case "tool_call_started":
-      return { kind: "neutral", label: "CALL" };
+      return { kind: "neutral", label: "Call" };
     case "tool_call_rejected":
-      return { kind: "fail", label: "REJECTED" };
+      return { kind: "fail", label: "Rejected" };
     case "assertion_evaluated":
       return status === "PASS"
-        ? { kind: "pass", label: "PASS" }
+        ? { kind: "pass", label: "Check passed" }
         : status === "FAIL"
-          ? { kind: "fail", label: "FAIL" }
-          : { kind: "unknown", label: "UNKNOWN" };
+          ? { kind: "fail", label: "Check failed" }
+          : { kind: "unknown", label: "Check unknown" };
     case "agent_decision":
     case "model_response":
-      return { kind: "decision", label: "AGENT" };
+      return { kind: "decision", label: "Agent" };
     case "agent_step":
-      return { kind: "neutral", label: "STEP" };
+      return { kind: "neutral", label: "Step" };
     case "artifact_submitted":
-      return { kind: "neutral", label: "REPORT" };
+      return { kind: "neutral", label: "Report" };
     case "budget_exceeded":
+      return { kind: "fail", label: "Budget hit" };
     case "agent_crashed":
+      return { kind: "fail", label: "Agent crashed" };
     case "agent_gave_up":
+      return { kind: "fail", label: "Agent gave up" };
     case "harness_error":
-      return { kind: "fail", label: e.phase.replace("_", " ").toUpperCase() };
+      return { kind: "unknown", label: "Harness error" };
+    case "run_started":
+      return { kind: "neutral", label: "Started" };
     case "run_completed": {
       const s = e.data?.status as string;
-      return { kind: s === "PASSED" ? "pass" : s === "CANCELLED" ? "neutral" : "fail", label: s ?? "DONE" };
+      return { kind: s === "PASSED" ? "pass" : s === "CANCELLED" ? "neutral" : "fail", label: "Finished" };
     }
     default:
-      return { kind: "neutral", label: e.phase.toUpperCase() };
+      return { kind: "neutral", label: e.phase.replace(/_/g, " ") };
   }
 }
 
-const DOT: Record<Kind, string> = {
-  fault: "bg-fault shadow-[0_0_10px_#ff8a1f]",
-  recover: "bg-recover shadow-[0_0_10px_#35d07f]",
-  fail: "bg-danger",
-  pass: "bg-recover/70",
-  unknown: "bg-unknown",
-  decision: "bg-sky-400/70",
-  neutral: "bg-graphite-500",
-};
 const LABEL: Record<Kind, string> = {
-  fault: "text-fault",
-  recover: "text-recover",
-  fail: "text-danger",
-  pass: "text-recover/80",
-  unknown: "text-unknown",
-  decision: "text-sky-300",
-  neutral: "text-graphite-400",
+  fault: "text-inject",
+  recover: "text-pass",
+  fail: "text-fail-text",
+  pass: "text-pass",
+  unknown: "text-[#9a6b00]",
+  decision: "text-cobalt-deep",
+  neutral: "text-ink-steel",
 };
 
 const QUIET = new Set(["tool_call_started", "agent_step"]);
@@ -72,75 +77,78 @@ const QUIET = new Set(["tool_call_started", "agent_step"]);
 export function TraceTimeline({
   events,
   title,
+  status,
   highlight = [],
   testId,
 }: {
   events: TraceEvent[];
   title: React.ReactNode;
+  status?: React.ReactNode;
   highlight?: number[];
   testId?: string;
 }) {
   const [showAll, setShowAll] = useState(false);
   const [open, setOpen] = useState<number | null>(null);
   const visible = showAll ? events : events.filter((e) => !QUIET.has(e.phase));
-  const maxOffset = Math.max(1, ...events.map((e) => e.offset_ms));
 
   return (
-    <div className="flex min-w-0 flex-col rounded-xl border border-graphite-700 bg-graphite-900/80" data-testid={testId}>
-      <div className="flex items-center justify-between gap-2 border-b border-graphite-800 px-4 py-3">
-        <div className="min-w-0 text-sm font-semibold text-graphite-100">{title}</div>
-        <label className="flex shrink-0 items-center gap-1.5 text-xs text-graphite-400">
-          <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} className="accent-fault" />
-          all events
+    <section className="flex min-w-0 flex-col rounded-2xl border border-line-soft bg-canvas" data-testid={testId}>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line-soft px-5 py-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <h3 className="text-subtitle font-bold text-ink-deep">{title}</h3>
+          {status}
+        </div>
+        <label className="flex cursor-pointer items-center gap-2 text-body-sm text-ink-steel">
+          <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} className="h-4 w-4 accent-[#0064e0]" />
+          Show every step
         </label>
       </div>
       {events.length === 0 ? (
-        <div className="px-4 py-10 text-center text-sm text-graphite-400">Waiting for the first event…</div>
+        <p className="px-5 py-12 text-center text-body-sm text-ink-steel">Waiting for the first event</p>
       ) : (
-        <ol className="max-h-[560px] overflow-y-auto py-2">
+        <ol className="max-h-[620px] divide-y divide-line-soft overflow-y-auto">
           {visible.map((e) => {
             const { kind, label } = classify(e);
             const isOpen = open === e.sequence;
-            const hl = highlight.includes(e.sequence);
             return (
               <li
                 key={e.sequence}
                 data-kind={kind}
                 data-phase={e.phase}
-                className={cn("animate-rise relative pl-9 pr-3", hl && "bg-fault/5")}
+                className={cn(
+                  "border-l-[3px] border-transparent",
+                  kind === "fault" && "border-inject bg-inject-tint",
+                  highlight.includes(e.sequence) && kind !== "fault" && "border-cobalt bg-cobalt-tint",
+                )}
               >
-                <span className="absolute left-[18px] top-0 h-full w-px bg-graphite-700" />
-                <span className={cn("absolute left-[14px] top-[11px] h-[9px] w-[9px] rounded-full", DOT[kind])} />
                 <button
-                  className="flex w-full items-start gap-3 rounded-md px-2 py-1.5 text-left hover:bg-graphite-800/60"
+                  className="grid w-full grid-cols-[52px_104px_minmax(0,1fr)_16px] items-start gap-3 px-4 py-3 text-left hover:bg-cloud/70"
                   onClick={() => setOpen(isOpen ? null : e.sequence)}
                   aria-expanded={isOpen}
                 >
-                  <span className="w-8 shrink-0 pt-0.5 font-mono text-[10px] text-graphite-500">#{e.sequence}</span>
-                  <span className={cn("w-[86px] shrink-0 pt-0.5 font-mono text-[10px] font-bold", LABEL[kind])}>{label}</span>
-                  <span className="min-w-0 flex-1">
-                    <span className={cn("block break-words text-xs", kind === "fault" ? "text-fault" : "text-graphite-100")}>
-                      {e.message}
+                  <span className="tnum pt-px text-caption text-ink-stone">{ms(e.offset_ms)}</span>
+                  <span className={cn("pt-px text-caption font-bold", LABEL[kind])}>{label}</span>
+                  <span className="min-w-0">
+                    <span className={cn("block break-words text-body-sm", kind === "fault" ? "font-bold text-inject" : "text-ink")}>
+                      {e.message.replace(/ -> /g, " → ")}
                     </span>
-                    <span className="mt-0.5 flex flex-wrap gap-x-3 font-mono text-[10px] text-graphite-500">
-                      <span>+{ms(e.offset_ms)}</span>
-                      {e.duration_ms != null && <span>took {ms(e.duration_ms)}</span>}
-                      {e.retry_index ? <span className="text-recover">retry {e.retry_index}</span> : null}
-                      {e.fault_id && <span className="text-fault">{e.fault_id}</span>}
-                      {e.invocation_id && <span>inv {e.invocation_id.slice(0, 8)}</span>}
-                    </span>
+                    {(e.duration_ms != null || e.retry_index || e.fault_id) && (
+                      <span className="tnum mt-0.5 flex flex-wrap gap-x-3 text-caption text-ink-steel">
+                        {e.duration_ms != null && <span>took {ms(e.duration_ms)}</span>}
+                        {e.retry_index ? <span className="font-bold text-pass">retry {e.retry_index}</span> : null}
+                        {e.fault_id && <span className="text-inject">{e.fault_id}</span>}
+                      </span>
+                    )}
                   </span>
-                  <span
-                    className="mt-1.5 hidden h-1 w-16 shrink-0 overflow-hidden rounded bg-graphite-800 sm:block"
-                    title="position in run"
-                  >
-                    <span className={cn("block h-full", DOT[kind])} style={{ width: `${(e.offset_ms / maxOffset) * 100}%` }} />
-                  </span>
+                  <ChevronRight
+                    aria-hidden
+                    className={cn("mt-0.5 h-4 w-4 text-ink-stone transition-transform", isOpen && "rotate-90")}
+                  />
                 </button>
                 {isOpen && (
                   <pre
                     data-testid="raw-event"
-                    className="mb-2 ml-10 max-h-72 overflow-auto rounded-md border border-graphite-700 bg-graphite-950 p-3 font-mono text-[11px] leading-relaxed text-graphite-300"
+                    className="mx-4 mb-4 max-h-72 overflow-auto rounded-lg bg-cloud p-4 font-mono text-[12px] leading-relaxed text-ink-charcoal"
                   >
                     {JSON.stringify(e, null, 2)}
                   </pre>
@@ -150,6 +158,6 @@ export function TraceTimeline({
           })}
         </ol>
       )}
-    </div>
+    </section>
   );
 }
