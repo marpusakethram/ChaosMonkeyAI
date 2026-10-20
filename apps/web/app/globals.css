@@ -1,0 +1,12 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: dark; }
+html, body { background: #0a0b0d; color: #e6e8ec; }
+body { min-height: 100vh; }
+::selection { background: #ff8a1f55; }
+.grid-bg {
+  background-image: linear-gradient(#ffffff06 1px, transparent 1px), linear-gradient(90deg, #ffffff06 1px, transparent 1px);
+  background-size: 28px 28px;
+}

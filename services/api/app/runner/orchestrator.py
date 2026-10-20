@@ -129,6 +129,7 @@ class Orchestrator:
         finally:
             with self._lock:
                 self._active.discard(run_id)
+            self._cancel.pop(run_id, None)
 
     def cancel(self, run_id: str) -> Run:
         run = db.get_run(run_id)

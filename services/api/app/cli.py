@@ -13,6 +13,10 @@ from app.runner.report import build_report
 from app.runner.trace import cleanup_old_traces, read_events, write_json_atomic
 
 MARK = {"PASS": "✓", "FAIL": "✗", "UNKNOWN": "?"}
+TAGS = {
+    "tool_call_completed": "OK", "tool_call_failed": "FAILED", "fault_injected": "FAULT", "agent_decision": "AGENT",
+    "budget_exceeded": "BUDGET", "agent_crashed": "CRASH", "harness_error": "HARNESS", "agent_gave_up": "GAVE UP",
+}
 
 
 def _print_run(run_id: str, as_json: bool) -> dict:
@@ -26,9 +30,10 @@ def _print_run(run_id: str, as_json: bool) -> dict:
         f = report["fault"]
         print(f"  fault: {f['fault_type']} -> {f['target_tool']} call #{f['occurrence']} (x{f['max_injections']})")
     for ev in read_events(run_id):
-        if ev.phase in ("tool_call_completed", "tool_call_failed", "fault_injected", "agent_decision", "budget_exceeded",
-                        "agent_crashed", "harness_error", "agent_gave_up"):
-            tag = "FAULT" if ev.phase == "fault_injected" else ev.phase.replace("tool_call_", "").upper()[:9]
+        if ev.phase in TAGS:
+            tag = TAGS[ev.phase]
+            if ev.phase == "tool_call_completed" and ev.output_schema_status != "valid":
+                tag = "BAD"
             print(f"  #{ev.sequence:<3} {ev.offset_ms:8.1f}ms {tag:<10} {ev.message}")
     print("  assertions:")
     for a in report["assertions"] or []:
