@@ -1,0 +1,747 @@
+<title>ChaosMonkey AI</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&display=swap">
+<style>
+/* Layout: B2B workspace in Meta's commerce language. White canvas, pill controls, hairline-only depth,
+   a sticky summary rail while configuring, a dark verdict band on results.
+   Purple = injected on purpose, red = broke, green = held or recovered. */
+:root {
+  --canvas: #ffffff; --cloud: #f1f4f7; --ink-deep: #0a1317; --ink: #1c1e21; --charcoal: #444950;
+  --steel: #5d6c7b; --stone: #8595a4; --line: #ced0d4; --line-soft: #dee3e9; --option-line: rgba(10,19,23,.14);
+  --cobalt: #0064e0; --cobalt-deep: #0457cb; --cobalt-tint: #e8f1fd; --select: #0143b5;
+  --inject: #a121ce; --inject-tint: #f7ecfb; --fail: #e41e3f; --fail-text: #c4122f; --fail-tint: #fdecef;
+  --pass: #1f7a35; --pass-tint: #e8f5eb; --attention: #f2a918; --unknown-text: #8a5f00;
+  --band: #0a1317; --band-fg: #ffffff; --band-muted: rgba(255,255,255,.7); --on-solid: #ffffff;
+  --mark-yellow: #f7b928; --mark-ink: #0a1317;
+  --font: "Figtree", "Montserrat", "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --canvas: #0e1317; --cloud: #182027; --ink-deep: #f3f6f8; --ink: #e4e8ec; --charcoal: #c3cad1;
+  --steel: #98a5b2; --stone: #74818d; --line: #3a444d; --line-soft: #26303a; --option-line: rgba(255,255,255,.16);
+  --cobalt: #3d8bff; --cobalt-deep: #6aa6ff; --cobalt-tint: #12294a; --select: #6aa6ff;
+  --inject: #d68bf0; --inject-tint: #2b1733; --fail: #ff5a72; --fail-text: #ff7d90; --fail-tint: #3a161d;
+  --pass: #4cc76b; --pass-tint: #133220; --attention: #f2b33a; --unknown-text: #f2c45c;
+  --band: #1b252d; --band-fg: #ffffff; --band-muted: rgba(255,255,255,.72); --on-solid: #0e1317;
+  --mark-yellow: #f7b928; --mark-ink: #0a1317; color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --canvas: #0e1317; --cloud: #182027; --ink-deep: #f3f6f8; --ink: #e4e8ec; --charcoal: #c3cad1;
+  --steel: #98a5b2; --stone: #74818d; --line: #3a444d; --line-soft: #26303a; --option-line: rgba(255,255,255,.16);
+  --cobalt: #3d8bff; --cobalt-deep: #6aa6ff; --cobalt-tint: #12294a; --select: #6aa6ff;
+  --inject: #d68bf0; --inject-tint: #2b1733; --fail: #ff5a72; --fail-text: #ff7d90; --fail-tint: #3a161d;
+  --pass: #4cc76b; --pass-tint: #133220; --attention: #f2b33a; --unknown-text: #f2c45c;
+  --band: #1b252d; --band-fg: #ffffff; --band-muted: rgba(255,255,255,.72); --on-solid: #0e1317;
+  --mark-yellow: #f7b928; --mark-ink: #0a1317; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--canvas); color: var(--ink); font-family: var(--font); font-size: 16px; line-height: 1.5;
+  letter-spacing: -0.16px; -webkit-font-smoothing: antialiased; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 30; background: var(--canvas); }
+button, input, select { font: inherit; color: inherit; letter-spacing: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--cobalt); outline-offset: 2px; }
+h1, h2, h3 { text-wrap: balance; margin: 0; }
+p { margin: 0; }
+.tnum { font-variant-numeric: tabular-nums; }
+.mono { font-family: var(--mono); letter-spacing: 0; }
+.wrap { max-width: 1280px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+@media (min-width: 640px) { .wrap { padding-left: max(32px, env(safe-area-inset-left, 0px)); padding-right: max(32px, env(safe-area-inset-right, 0px)); } }
+
+/* nav */
+.nav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: var(--canvas); border-bottom: 1px solid var(--line-soft); }
+.nav-in { display: flex; align-items: center; gap: 20px; height: 64px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; color: var(--ink-deep); background: none; border: 0; padding: 0; }
+.tabs { display: flex; gap: 8px; }
+.pill-tab { border: 1px solid var(--line); background: var(--canvas); border-radius: 999px; padding: 8px 16px; font-size: 14px; font-weight: 700; color: var(--ink); white-space: nowrap; }
+@media (max-width: 560px) { .brand span { display: none; } .nav-in { gap: 12px; } .pill-tab { padding: 8px 14px; } }
+.pill-tab:hover { background: var(--cloud); }
+.pill-tab[aria-checked="true"], .pill-tab[aria-current="page"] { background: var(--ink-deep); color: var(--canvas); border-color: var(--ink-deep); }
+.env { margin-left: auto; display: none; align-items: center; gap: 8px; font-size: 14px; color: var(--steel); }
+@media (min-width: 900px) { .env { display: flex; } }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.note { background: var(--cloud); font-size: 13px; color: var(--charcoal); }
+.note .wrap { padding-block: 10px; display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.note a { color: var(--cobalt); font-weight: 700; text-decoration: none; }
+.note a:hover { text-decoration: underline; }
+main { padding-block: 32px 96px; }
+
+/* type */
+.h-page { font-size: 36px; line-height: 1.2; font-weight: 500; color: var(--ink-deep); }
+@media (min-width: 640px) { .h-page { font-size: 48px; line-height: 1.17; } }
+.lead { font-size: 18px; line-height: 1.45; color: var(--charcoal); max-width: 720px; }
+.h-sec { font-size: 24px; line-height: 1.25; font-weight: 500; color: var(--ink-deep); }
+.sub { font-size: 14px; color: var(--steel); }
+.small { font-size: 12px; line-height: 1.35; color: var(--steel); }
+.b { font-weight: 700; }
+
+/* buttons */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 999px; height: 44px; padding: 0 30px;
+  font-size: 14px; font-weight: 700; border: 2px solid transparent; white-space: nowrap; transition: background .15s; text-decoration: none; }
+.btn-sm { height: 36px; padding: 0 16px; }
+.btn-primary { background: var(--cobalt); color: #fff; }
+.btn-primary:hover { background: var(--cobalt-deep); }
+.btn-ink { background: var(--ink-deep); color: var(--canvas); }
+.btn-outline { background: transparent; border-color: var(--ink-deep); color: var(--ink-deep); }
+.btn-outline:hover { background: var(--cloud); }
+.btn-ghost { background: transparent; border-color: var(--option-line); color: var(--ink-deep); }
+.btn-ghost:hover { background: var(--cloud); }
+.btn:disabled { background: var(--line); color: var(--canvas); border-color: transparent; cursor: not-allowed; }
+.btn-band { background: transparent; border-color: rgba(255,255,255,.35); color: var(--band-fg); }
+.btn-band:hover { background: rgba(255,255,255,.1); }
+.w-full { width: 100%; }
+
+/* badges */
+.badge { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 700; line-height: 1.3; letter-spacing: 0; }
+.t-pass { background: var(--pass); color: var(--on-solid); }
+.t-fail { background: var(--fail); color: var(--on-solid); }
+.t-inject { background: var(--inject); color: var(--on-solid); }
+.t-attn { background: var(--attention); color: #0a1317; }
+.t-muted { background: var(--steel); color: var(--canvas); }
+.t-neutral { background: var(--cloud); color: var(--charcoal); }
+.t-outline { border: 1px solid var(--line); color: var(--charcoal); padding: 3px 9px; }
+.pulse { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 1s infinite; }
+@keyframes pulse { 50% { opacity: .3; } }
+
+/* new test */
+.grid-config { display: grid; gap: 32px; }
+@media (min-width: 1024px) { .grid-config { grid-template-columns: minmax(0,1fr) 380px; } }
+.stack { display: flex; flex-direction: column; }
+.g8 { gap: 8px; } .g12 { gap: 12px; } .g16 { gap: 16px; } .g24 { gap: 24px; } .g40 { gap: 40px; }
+.scenario { background: var(--cloud); border-radius: 32px; padding: 28px 24px; }
+@media (min-width: 640px) { .scenario { padding: 28px 32px; } }
+.scenario-q { font-size: 28px; line-height: 1.22; font-weight: 300; color: var(--ink-deep); margin-top: 12px; }
+.option { display: flex; align-items: flex-start; gap: 16px; width: 100%; text-align: left; background: var(--canvas);
+  border: 1px solid var(--option-line); border-radius: 8px; padding: 20px; }
+.option:hover { border-color: var(--stone); }
+.option[aria-checked="true"] { border: 2px solid var(--select); padding: 19px; }
+.option:disabled { opacity: .5; cursor: not-allowed; }
+.radio { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line); flex: none; display: grid; place-items: center; margin-top: 2px; }
+.option[aria-checked="true"] .radio { border-color: var(--select); }
+.option[aria-checked="true"] .radio::after { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--select); }
+.opt-icon { width: 40px; height: 40px; border-radius: 50%; background: var(--cloud); display: grid; place-items: center; flex: none; color: var(--ink-deep); }
+.opt-body { flex: 1; min-width: 0; }
+.opt-title { display: block; font-weight: 700; color: var(--ink-deep); }
+.opt-desc { display: block; font-size: 14px; color: var(--steel); margin-top: 4px; }
+.opt-aside { display: none; flex: none; font-size: 14px; color: var(--steel); }
+@media (min-width: 640px) { .opt-aside { display: block; } }
+.box { border: 1px solid var(--line-soft); border-radius: 16px; }
+.pad { padding: 24px; }
+.fields { display: grid; gap: 24px; }
+@media (min-width: 640px) { .fields { grid-template-columns: 1fr 1fr; } }
+.pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.stepper { display: flex; align-items: center; gap: 12px; }
+.step-btn { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); background: var(--canvas); font-weight: 700; font-size: 18px; color: var(--ink-deep); }
+.step-btn:hover { background: var(--cloud); }
+.step-btn:disabled { opacity: .3; cursor: not-allowed; }
+.summary { position: relative; }
+@media (min-width: 1024px) { .summary { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 88px); align-self: start; } }
+.summary-card { border: 1px solid var(--line-soft); border-radius: 16px; padding: 24px; background: var(--canvas); box-shadow: 0 1px 4px rgba(20,22,26,.16); }
+.kv { display: grid; grid-template-columns: 88px minmax(0,1fr); gap: 12px; padding-block: 12px; border-top: 1px solid var(--line-soft); font-size: 14px; }
+.kv:first-child { border-top: 0; }
+.kv dt { color: var(--steel); }
+.kv dd { margin: 0; min-width: 0; color: var(--ink); }
+.input { height: 36px; width: 96px; border: 1px solid var(--line); border-radius: 8px; padding: 0 12px; background: var(--canvas); font-size: 14px; }
+.input:focus { border: 2px solid var(--cobalt); outline: none; padding: 0 11px; }
+.link { color: var(--cobalt); font-weight: 700; background: none; border: 0; padding: 0; font-size: 14px; }
+.link:hover { text-decoration: underline; }
+
+/* tables */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line-soft); border-radius: 16px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.runs { min-width: 720px; }
+.runs th { background: var(--cloud); color: var(--steel); text-align: left; font-weight: 700; padding: 12px 20px; }
+.runs td { padding: 12px 20px; border-top: 1px solid var(--line-soft); }
+.runs tr.click { cursor: pointer; }
+.runs tr.click:hover td { background: var(--cloud); }
+.r { text-align: right !important; }
+.empty { border: 1px dashed var(--line); border-radius: 16px; padding: 48px 24px; text-align: center; display: grid; justify-items: center; gap: 10px; }
+
+/* run page */
+.crumbs { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--steel); }
+.crumbs button { background: none; border: 0; padding: 0; color: var(--steel); font-size: 14px; }
+.crumbs button:hover { color: var(--ink-deep); text-decoration: underline; }
+.badges { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.verdict { background: var(--band); color: var(--band-fg); border-radius: 32px; padding: 32px 24px; display: grid; gap: 32px; }
+@media (min-width: 640px) { .verdict { padding: 40px; } }
+@media (min-width: 1024px) { .verdict { grid-template-columns: minmax(0,1fr) auto; } }
+.verdict-h { font-size: 34px; line-height: 1.18; font-weight: 500; max-width: 760px; }
+@media (min-width: 640px) { .verdict-h { font-size: 48px; } }
+.verdict-sub { font-size: 14px; color: var(--band-muted); max-width: 760px; overflow-wrap: anywhere; }
+.stats { display: grid; grid-template-columns: repeat(3, auto); gap: 24px; justify-content: start; }
+@media (min-width: 1024px) { .stats { text-align: right; justify-content: end; } .verdict-side { align-items: flex-end; } }
+.stats dt { font-size: 12px; color: var(--band-muted); }
+.stats dd { margin: 0; font-size: 24px; font-weight: 500; }
+.verdict-side { display: flex; flex-direction: column; justify-content: space-between; gap: 24px; }
+@media (prefers-reduced-motion: no-preference) { .verdict-in { animation: vin .42s cubic-bezier(.2,.7,.2,1) both; } }
+@keyframes vin { from { opacity: .001; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.callout { display: flex; gap: 12px; background: var(--inject-tint); color: var(--inject); border-radius: 12px; padding: 16px 20px; font-size: 14px; }
+.callout .muted { opacity: .8; }
+.lanes { display: grid; gap: 24px; }
+@media (min-width: 1280px) { .lanes.two { grid-template-columns: 1fr 1fr; } }
+.lane { border: 1px solid var(--line-soft); border-radius: 16px; min-width: 0; display: flex; flex-direction: column; }
+.lane-h { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--line-soft); }
+.lane-t { display: flex; align-items: center; gap: 12px; font-size: 18px; font-weight: 700; color: var(--ink-deep); }
+.check { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--steel); cursor: pointer; }
+.check input { width: 16px; height: 16px; accent-color: var(--cobalt); }
+.events { list-style: none; margin: 0; padding: 0; max-height: 620px; overflow-y: auto; }
+.ev { border-top: 1px solid var(--line-soft); border-left: 3px solid transparent; }
+.ev:first-child { border-top: 0; }
+.ev.k-fault { border-left-color: var(--inject); background: var(--inject-tint); }
+.ev.hl { border-left-color: var(--cobalt); background: var(--cobalt-tint); }
+.ev-row { display: grid; grid-template-columns: 52px 100px minmax(0,1fr) 14px; gap: 12px; align-items: start; width: 100%; text-align: left;
+  background: none; border: 0; padding: 12px 16px; }
+.ev-row:hover { background: color-mix(in srgb, var(--cloud) 70%, transparent); }
+.ev-off { font-size: 12px; color: var(--stone); padding-top: 1px; }
+.ev-label { font-size: 12px; font-weight: 700; padding-top: 1px; }
+.ev-msg { display: block; font-size: 14px; overflow-wrap: anywhere; }
+.ev-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--steel); margin-top: 2px; }
+.chev { color: var(--stone); transition: transform .15s; margin-top: 3px; }
+.chev.open { transform: rotate(90deg); }
+.raw { margin: 0 16px 16px; max-height: 288px; overflow: auto; background: var(--cloud); border-radius: 8px; padding: 16px;
+  font-family: var(--mono); font-size: 12px; line-height: 1.55; color: var(--charcoal); white-space: pre; }
+.c-fault { color: var(--inject); } .c-recover, .c-pass { color: var(--pass); } .c-fail { color: var(--fail-text); }
+.c-unknown { color: var(--unknown-text); } .c-decision { color: var(--cobalt-deep); } .c-neutral { color: var(--steel); }
+.grid-report { display: grid; gap: 24px; }
+@media (min-width: 1024px) { .grid-report { grid-template-columns: minmax(0,1fr) 380px; } }
+.cmp { min-width: 460px; }
+.cmp th { color: var(--steel); text-align: left; font-weight: 700; padding: 12px 16px 12px 0; border-bottom: 1px solid var(--line-soft); }
+.cmp td { padding: 12px 16px 12px 0; border-top: 1px solid var(--line-soft); }
+.cmp tr:first-child td { border-top: 0; }
+.checks { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line-soft); }
+.checks li { display: flex; gap: 16px; padding: 16px 24px; border-top: 1px solid var(--line-soft); }
+.checks li:first-child { border-top: 0; }
+.mark { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; flex: none; margin-top: 2px; }
+.mark svg { width: 14px; height: 14px; }
+.m-PASS { background: var(--pass); color: var(--on-solid); } .m-FAIL { background: var(--fail); color: var(--on-solid); } .m-UNKNOWN { background: var(--attention); color: #0a1317; }
+.chip-btn { height: 32px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--canvas); font-size: 12px; font-weight: 700; align-self: center; flex: none; }
+.chip-btn:hover { background: var(--cloud); }
+.rail { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+.tips { background: var(--cloud); border-radius: 16px; padding: 24px; }
+ul.plain { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 12px; font-size: 14px; }
+.meta-grid { display: grid; grid-template-columns: 88px minmax(0,1fr); gap: 8px 12px; font-size: 12px; margin-top: 20px; }
+.meta-grid dt { color: var(--steel); } .meta-grid dd { margin: 0; overflow-wrap: anywhere; color: var(--charcoal); }
+.fine { margin: 20px 0 0; padding-left: 16px; font-size: 12px; color: var(--steel); display: flex; flex-direction: column; gap: 6px; }
+details.art summary { cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; font-size: 18px; font-weight: 700; color: var(--ink-deep); }
+details.art summary::-webkit-details-marker { display: none; }
+details.art[open] .chev { transform: rotate(90deg); }
+.toast { font-size: 12px; color: var(--pass); font-weight: 700; }
+.err { display: flex; gap: 12px; align-items: flex-start; border: 1px solid color-mix(in srgb, var(--fail) 40%, transparent); background: var(--fail-tint); color: var(--fail-text); border-radius: 12px; padding: 12px 16px; font-size: 14px; }
+footer { border-top: 1px solid var(--line-soft); }
+footer .wrap { padding-block: 24px; font-size: 12px; color: var(--steel); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+</style>
+
+<div id="app"></div>
+
+<script src="https://unpkg.com/htm@3.1.1/preact/standalone.umd.js"></script>
+<script src="engine.js"></script>
+<script>
+(function () {
+  "use strict";
+  const { html, render, useState, useEffect, useRef } = window.htmPreact;
+  const E = window.ChaosEngine;
+  const REPO = "https://github.com/marpusakethram/ChaosMonkeyAI";
+  const TERMINAL = ["PASSED", "FAILED", "ERROR", "CANCELLED"];
+  const FAULT_NAMES = { http_429: "Rate limit (429)", malformed_json: "Malformed JSON", timeout: "Timeout", conflicting_sources: "Conflicting sources", prompt_injection: "Prompt injection" };
+  const FAULT_PLAIN = {
+    http_429: "The tool answers “too many requests” with a retry-after hint instead of data.",
+    malformed_json: "The tool returns a cut-off JSON body with a 200 status.",
+    timeout: "The tool stalls past the 400 ms budget and the call is abandoned.",
+    conflicting_sources: "A second result disagrees and was measured on a different setup.",
+    prompt_injection: "A source excerpt tells the agent to report the value as 999.",
+  };
+  const AGENT_COPY = {
+    "scripted-robust": ["Reference agent, careful", "Validates every response, retries twice with backoff, treats source text as data."],
+    "scripted-naive": ["Reference agent, fragile", "No retries, patches broken JSON, follows instructions it finds in sources. Built to fail visibly."],
+    gemini: ["Gemini agent", "Needs the full app and a GEMINI_API_KEY. Not available in the browser preview."],
+  };
+
+  // ---------- store ----------
+  const store = { runs: [], listeners: new Set(), cancels: {} };
+  const STORAGE_KEY = "chaosmonkey-preview-runs-v1";
+  function load() {
+    try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) store.runs = JSON.parse(raw); } catch (e) { store.runs = []; }
+    store.runs.forEach((r) => { if (!TERMINAL.includes(r.status)) { r.status = "CANCELLED"; r.status_reason = "interrupted when the page was closed"; } });
+  }
+  function save() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(store.runs.slice(0, 30))); } catch (e) { /* storage unavailable: keep in memory */ }
+  }
+  let scheduled = false;
+  function notify() {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(() => { scheduled = false; store.listeners.forEach((f) => f()); });
+  }
+  const getRun = (id) => store.runs.find((r) => r.run_id === id);
+  function startRun(opts, replayOf) {
+    const run = E.createRun(opts);
+    store.runs.unshift(run);
+    const cancel = { cancelled: false };
+    store.cancels[run.run_id] = cancel;
+    notify();
+    const replayEvents = replayOf ? getRun(replayOf).events : undefined;
+    E.executeRun(run, { onEvent: notify, onUpdate: () => { notify(); if (TERMINAL.includes(run.status)) save(); }, cancel, replayEvents })
+      .catch((e) => { run.status = "ERROR"; run.failure_origin = "harness"; run.status_reason = String(e && e.message || e); notify(); save(); });
+    return run;
+  }
+  function useStore() {
+    const [, set] = useState(0);
+    useEffect(() => { const f = () => set((n) => n + 1); store.listeners.add(f); return () => store.listeners.delete(f); }, []);
+    return store;
+  }
+
+  // ---------- utils ----------
+  const ms = (v) => (v == null ? "–" : v >= 1000 ? `${(v / 1000).toFixed(2)} s` : `${Math.round(v)} ms`);
+  const shortId = (id) => (id ? id.slice(0, 8) : "–");
+  function relTime(iso) {
+    const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+    if (s < 60) return `${s}s ago`; if (s < 3600) return `${Math.round(s / 60)}m ago`; if (s < 86400) return `${Math.round(s / 3600)}h ago`;
+    return new Date(iso).toLocaleDateString();
+  }
+  const cx = (...a) => a.filter(Boolean).join(" ");
+
+  // ---------- icons ----------
+  const Ico = {
+    mark: (s = 24) => html`<svg width=${s} height=${s} viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="var(--mark-yellow)"/><path d="M12 1a11 11 0 0 1 11 11H12z" fill="var(--mark-ink)"/><path d="M12 23A11 11 0 0 1 1 12h11z" fill="var(--mark-ink)"/><circle cx="12" cy="12" r="11" fill="none" stroke="var(--mark-ink)" stroke-width="1.5"/></svg>`,
+    chev: (open) => html`<svg class=${cx("chev", open && "open")} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>`,
+    zap: () => html`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>`,
+    check: () => html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`,
+    x: () => html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>`,
+    q: () => html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg>`,
+    replay: () => html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>`,
+    fault: {
+      http_429: html`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"/><path d="M3.3 19a10 10 0 1 1 17.4 0"/></svg>`,
+      malformed_json: html`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5a2 2 0 0 0 2 2h1"/><path d="M16 21h1a2 2 0 0 0 2-2v-5a2 2 0 0 1 2-2 2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1"/></svg>`,
+      timeout: html`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2h4M12 14l3-3"/><circle cx="12" cy="14" r="8"/></svg>`,
+      conflicting_sources: html`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.2-2.9L3 3M21 3l-7.8 7.8"/></svg>`,
+      prompt_injection: html`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.7 9a1 1 0 0 1-.7 0C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.2-2.7a1.2 1.2 0 0 1 1.6 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M12 8v4M12 16h.01"/></svg>`,
+    },
+  };
+
+  // ---------- small components ----------
+  const STATUS = { PASSED: ["t-pass", "Passed"], FAILED: ["t-fail", "Failed"], ERROR: ["t-muted", "Harness error"], CANCELLED: ["t-neutral", "Cancelled"], RUNNING: ["t-attn", "Running"], CREATED: ["t-neutral", "Queued"] };
+  const StatusBadge = ({ status }) => {
+    const [t, label] = STATUS[status] || STATUS.CREATED;
+    return html`<span class=${cx("badge", t)}>${status === "RUNNING" && html`<span class="pulse"></span>`}${label}</span>`;
+  };
+  const Option = ({ selected, disabled, onSelect, title, desc, aside, icon }) => html`
+    <button type="button" role="radio" class="option" aria-checked=${selected ? "true" : "false"} disabled=${disabled} onClick=${onSelect}>
+      <span class="radio" aria-hidden="true"></span>
+      ${icon && html`<span class="opt-icon" aria-hidden="true">${icon}</span>`}
+      <span class="opt-body"><span class="opt-title">${title}</span><span class="opt-desc">${desc}</span></span>
+      ${aside && html`<span class="opt-aside">${aside}</span>`}
+    </button>`;
+  const Pills = ({ value, options, onChange, label }) => html`
+    <div class="pills" role="radiogroup" aria-label=${label}>
+      ${options.map((o) => html`<button type="button" role="radio" class="pill-tab" aria-checked=${value === o.value ? "true" : "false"} onClick=${() => onChange(o.value)}>${o.label}</button>`)}
+    </div>`;
+  const Stepper = ({ value, min, max, onChange, label }) => html`
+    <div class="stepper">
+      <button type="button" class="step-btn" aria-label=${"Decrease " + label} disabled=${value <= min} onClick=${() => onChange(value - 1)}>−</button>
+      <span class="tnum b" style="font-size:18px;width:24px;text-align:center" aria-live="polite">${value}</span>
+      <button type="button" class="step-btn" aria-label=${"Increase " + label} disabled=${value >= max} onClick=${() => onChange(value + 1)}>+</button>
+    </div>`;
+  const Field = ({ label, hint, children }) => html`
+    <div class="stack g8"><div><div class="b" style="font-size:14px;color:var(--ink-deep)">${label}</div><div class="small">${hint}</div></div>${children}</div>`;
+  const SectionHead = ({ title, text }) => html`<div><h2 class="h-sec">${title}</h2><p class="sub" style="margin-top:4px">${text}</p></div>`;
+
+  // ---------- runs table ----------
+  function RunsTable({ runs, open }) {
+    if (!runs.length) return html`
+      <div class="empty">${Ico.mark(32)}<p class="b" style="color:var(--ink-deep)">No runs yet</p>
+        <p class="sub" style="max-width:360px">Pick a fault above and run a crash test. Runs show up here as they finish.</p></div>`;
+    return html`<div class="table-wrap"><table class="runs">
+      <thead><tr><th>Test</th><th>Agent</th><th>Result</th><th class="r">Checks</th><th class="r">Duration</th><th class="r">Started</th></tr></thead>
+      <tbody>${runs.map((r) => html`
+        <tr class="click" onClick=${() => open(r.run_id)}>
+          <td><button class="link" style=${r.fault_config ? "color:var(--inject)" : "color:var(--ink-deep)"} onClick=${(e) => { e.stopPropagation(); open(r.run_id); }}>
+            ${r.fault_config ? FAULT_NAMES[r.fault_config.fault_type] : r.kind === "replay" ? "Replay" : "Baseline"}</button>
+            <span class="mono small" style="margin-left:8px;color:var(--stone)">${shortId(r.run_id)}</span>
+            ${r.example && html`<span class="badge t-outline" style="margin-left:8px">Example</span>`}</td>
+          <td class="mono small" style="color:var(--charcoal)">${r.agent_adapter}</td>
+          <td><${StatusBadge} status=${r.status} /></td>
+          <td class="r tnum">${r.score ? `${r.score.passed}/${r.score.applicable}` : "–"}</td>
+          <td class="r tnum">${ms(r.latency_ms)}</td>
+          <td class="r" style="color:var(--steel)">${relTime(r.created_at)}</td>
+        </tr>`)}</tbody></table></div>`;
+  }
+
+  // ---------- new test ----------
+  function NewTest({ open, state, setState }) {
+    const s = useStore();
+    const { agent, seed, fault, baselineId } = state;
+    const set = (patch) => setState({ ...state, ...patch });
+    const baseline = baselineId ? getRun(baselineId) : null;
+    const busy = baseline && !TERMINAL.includes(baseline.status);
+    const baselineUsable = baseline && baseline.agent_adapter === agent && baseline.seed === seed && ["PASSED", "FAILED"].includes(baseline.status);
+    const spec = fault ? E.FAULTS[fault.fault_type] : null;
+    const [error, setError] = useState(null);
+
+    const runBaseline = () => { setError(null); const r = startRun({ kind: "baseline", agent, seed }); set({ baselineId: r.run_id }); };
+    const runCrash = () => {
+      setError(null);
+      try {
+        let baseId = baselineUsable ? baseline.run_id : startRun({ kind: "baseline", agent, seed }).run_id;
+        const r = startRun({ kind: "chaos", agent, seed, fault, baseline_run_id: baseId });
+        open(r.run_id);
+      } catch (e) { setError(e.message); }
+    };
+
+    return html`<div class="stack g40">
+      <header class="stack g12" style="max-width:768px">
+        <h1 class="h-page">New crash test</h1>
+        <p class="lead">Run the agent once clean, then again with one fault injected at the tool boundary. The verdict comes from the recorded trace, not from the agent grading itself.</p>
+      </header>
+      ${error && html`<div class="err" role="alert">${error}</div>`}
+      <div class="grid-config">
+        <div class="stack g40" style="min-width:0">
+          <section class="scenario" aria-labelledby="scn">
+            <h2 id="scn" class="b" style="font-size:14px;color:var(--steel)">Scenario robotics-benchmark, fixture ${E.TASK.fixture_version}</h2>
+            <p class="scenario-q">${E.TASK.task}</p>
+            <p class="sub" style="margin-top:16px">Tools: get_benchmark, get_research_paper, verify_citation. Every record is fictional and marked as simulation.</p>
+          </section>
+          <section class="stack g16">
+            <${SectionHead} title="Agent" text="Which agent to put through the test." />
+            <div class="stack g12" role="radiogroup" aria-label="Agent">
+              ${["scripted-robust", "scripted-naive", "gemini"].map((name) => html`<${Option}
+                selected=${agent === name} disabled=${name === "gemini"} onSelect=${() => set({ agent: name })}
+                title=${AGENT_COPY[name][0]} desc=${AGENT_COPY[name][1]} aside=${html`<span class="mono small">${name}</span>`} />`)}
+            </div>
+          </section>
+          <section class="stack g16">
+            <${SectionHead} title="Fault" text="One documented failure, injected between the agent and its tools." />
+            <div class="stack g12" role="radiogroup" aria-label="Fault">
+              ${Object.entries(E.FAULTS).map(([type, f]) => html`<${Option}
+                selected=${fault && fault.fault_type === type} icon=${Ico.fault[type]}
+                onSelect=${() => set({ fault: { fault_type: type, target_tool: f.default_target, occurrence: 1, max_injections: 1, severity: "medium" } })}
+                title=${FAULT_NAMES[type]} desc=${FAULT_PLAIN[type]} aside=${f.allowed_targets.length === 1 ? `Only on ${f.default_target}` : "Any tool"} />`)}
+            </div>
+          </section>
+          ${spec && html`<section class="stack g16">
+            <${SectionHead} title="Injection point" text=${spec.expected_behavior} />
+            <div class="box pad"><div class="fields">
+              <${Field} label="Tool" hint="Where the fault lands.">
+                <${Pills} label="Target tool" value=${fault.target_tool} options=${spec.allowed_targets.map((t) => ({ value: t, label: t }))} onChange=${(t) => set({ fault: { ...fault, target_tool: t } })} />
+              <//>
+              <${Field} label="Severity" hint="Longer stalls and retry-after hints at higher severity.">
+                <${Pills} label="Severity" value=${fault.severity} options=${[{ value: "low", label: "Low" }, { value: "medium", label: "Medium" }, { value: "high", label: "High" }]} onChange=${(v) => set({ fault: { ...fault, severity: v } })} />
+              <//>
+              <${Field} label="On call number" hint="Retries count as calls.">
+                <${Stepper} label="call number" value=${fault.occurrence} min=${1} max=${10} onChange=${(n) => set({ fault: { ...fault, occurrence: n } })} />
+              <//>
+              <${Field} label="Calls in a row" hint="Three in a row outlasts a two-retry agent.">
+                <${Stepper} label="calls in a row" value=${fault.max_injections} min=${1} max=${3} onChange=${(n) => set({ fault: { ...fault, max_injections: n } })} />
+              <//>
+            </div></div>
+          </section>`}
+        </div>
+
+        <aside class="summary"><div class="summary-card">
+          <h2 class="h-sec">Test summary</h2>
+          <dl style="margin:16px 0 0">
+            <div class="kv"><dt>Agent</dt><dd><span class="b" style="color:var(--ink-deep)">${AGENT_COPY[agent][0]}</span>
+              <span style="display:block;margin-top:6px"><span class="badge t-outline"><span class="dot" style="background:var(--steel)"></span>Offline fixtures</span></span></dd></div>
+            <div class="kv"><dt>Fault</dt><dd>${fault ? html`<span class="b" style="color:var(--inject)">${FAULT_NAMES[fault.fault_type]}</span>` : html`<span style="color:var(--stone)">Pick a fault</span>`}</dd></div>
+            ${fault && html`<div class="kv"><dt>Lands on</dt><dd class="tnum">${fault.target_tool}, call ${fault.occurrence}${fault.max_injections > 1 ? `–${fault.occurrence + fault.max_injections - 1}` : ""}</dd></div>`}
+            <div class="kv"><dt><label for="seed">Seed</label></dt><dd><input id="seed" class="input tnum" type="number" min="0" value=${seed}
+              onInput=${(e) => set({ seed: Math.max(0, Math.floor(+e.target.value || 0)) })} /></dd></div>
+            <div class="kv"><dt>Baseline</dt><dd>${!baseline ? html`<span style="color:var(--stone)">Runs automatically if missing</span>` : html`
+              <span style="display:flex;flex-wrap:wrap;align-items:center;gap:8px"><${StatusBadge} status=${baseline.status} />
+              <span class="tnum" style="color:var(--steel)">${baseline.score ? `${baseline.score.passed} of ${baseline.score.applicable} checks` : ""}${baseline.latency_ms ? `, ${ms(baseline.latency_ms)}` : ""}</span>
+              <button class="link" onClick=${() => open(baseline.run_id)}>View trace</button></span>`}</dd></div>
+          </dl>
+          <div class="stack g12" style="margin-top:24px">
+            <button class="btn btn-primary w-full" disabled=${!fault || busy} onClick=${runCrash}>Run crash test</button>
+            <button class="btn btn-outline w-full" disabled=${busy} onClick=${runBaseline}>${busy ? "Running baseline" : "Run baseline only"}</button>
+          </div>
+          <p class="small" style="margin-top:16px">${baselineUsable ? "The crash test will be compared with the baseline above." : "A baseline with the same agent and seed runs alongside, so there is always a clean trace to compare."}</p>
+        </div></aside>
+      </div>
+
+      <section class="stack g16">
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px">
+          <${SectionHead} title="Recent runs" text="Newest first. Stored in this browser only." />
+          <button class="link" onClick=${() => open("history")}>All runs</button>
+        </div>
+        <${RunsTable} runs=${s.runs.slice(0, 6)} open=${open} />
+      </section>
+    </div>`;
+  }
+
+  // ---------- trace timeline ----------
+  const SCHEMA_LABEL = { invalid_json: "Invalid JSON", schema_mismatch: "Wrong shape", error_status: "Error response", timeout: "Timed out" };
+  function classify(e) {
+    const st = e.data && e.data.status;
+    switch (e.phase) {
+      case "fault_injected": return ["fault", "Fault injected"];
+      case "tool_call_completed":
+        if (e.output_schema_status !== "valid") return ["fail", SCHEMA_LABEL[e.output_schema_status] || "Bad response"];
+        return (e.retry_index || 0) > 0 ? ["recover", "Recovered"] : ["neutral", "Response"];
+      case "tool_call_failed": return ["fail", e.exception_type === "ToolTimeoutError" ? "Timed out" : "Call failed"];
+      case "tool_call_started": return ["neutral", "Call"];
+      case "tool_call_rejected": return ["fail", "Rejected"];
+      case "assertion_evaluated": return st === "PASS" ? ["pass", "Check passed"] : st === "FAIL" ? ["fail", "Check failed"] : ["unknown", "Check unknown"];
+      case "agent_decision": return ["decision", "Agent"];
+      case "agent_step": return ["neutral", "Step"];
+      case "artifact_submitted": return ["neutral", "Report"];
+      case "budget_exceeded": return ["fail", "Budget hit"];
+      case "agent_crashed": return ["fail", "Agent crashed"];
+      case "agent_gave_up": return ["fail", "Agent gave up"];
+      case "harness_error": return ["unknown", "Harness error"];
+      case "run_started": return ["neutral", "Started"];
+      case "run_completed": { const s = e.data.status; return [s === "PASSED" ? "pass" : s === "CANCELLED" ? "neutral" : "fail", "Finished"]; }
+      default: return ["neutral", e.phase.replace(/_/g, " ")];
+    }
+  }
+  const QUIET = new Set(["tool_call_started", "agent_step"]);
+  function Timeline({ events, title, status, highlight }) {
+    const [all, setAll] = useState(false);
+    const [open, setOpen] = useState(null);
+    const visible = all ? events : events.filter((e) => !QUIET.has(e.phase));
+    return html`<section class="lane">
+      <div class="lane-h"><div class="lane-t">${title}${status}</div>
+        <label class="check"><input type="checkbox" checked=${all} onChange=${(e) => setAll(e.target.checked)} />Show every step</label></div>
+      ${!events.length ? html`<p class="sub" style="padding:48px 20px;text-align:center">Waiting for the first event</p>` : html`
+      <ol class="events">${visible.map((e) => {
+        const [kind, label] = classify(e);
+        const isOpen = open === e.sequence;
+        const hl = highlight && highlight.includes(e.sequence) && kind !== "fault";
+        return html`<li key=${e.sequence} class=${cx("ev", "k-" + kind, hl && "hl")}>
+          <button class="ev-row" aria-expanded=${isOpen ? "true" : "false"} onClick=${() => setOpen(isOpen ? null : e.sequence)}>
+            <span class="ev-off tnum">${ms(e.offset_ms)}</span>
+            <span class=${cx("ev-label", "c-" + kind)}>${label}</span>
+            <span style="min-width:0"><span class="ev-msg" style=${kind === "fault" ? "color:var(--inject);font-weight:700" : ""}>${e.message.replace(/ -> /g, " → ")}</span>
+              ${(e.duration_ms != null || e.retry_index || e.fault_id) && html`<span class="ev-meta tnum">
+                ${e.duration_ms != null && html`<span>took ${ms(e.duration_ms)}</span>`}
+                ${e.retry_index ? html`<span class="b c-pass">retry ${e.retry_index}</span>` : null}
+                ${e.fault_id && html`<span class="c-fault">${e.fault_id}</span>`}</span>`}</span>
+            ${Ico.chev(isOpen)}
+          </button>
+          ${isOpen && html`<pre class="raw">${JSON.stringify(e, null, 2)}</pre>`}
+        </li>`;
+      })}</ol>`}
+    </section>`;
+  }
+
+  // ---------- run page ----------
+  const OUTCOME = {
+    recovered: ["t-pass", "Recovered", "The agent absorbed the fault."],
+    graceful_failure: ["t-attn", "Graceful failure", "The agent stopped and said why."],
+    silent_failure: ["t-fail", "Silent failure", "The agent kept going on bad data."],
+    crashed: ["t-fail", "Crashed", "The agent fell over on the fault."],
+    not_applicable: ["t-neutral", "Fault never fired", "The fault never fired."],
+  };
+  function humanReason(r) {
+    if (!r) return "Waiting for the agent";
+    if (r === "all applicable assertions passed") return "All checks passed.";
+    return r.replace(/^assertions not passed: /, "Failed checks: ");
+  }
+  const CHECK_LINE = /^[a-z_]+ (FAIL|UNKNOWN|PASS):/;
+
+  function RunPage({ id, open }) {
+    useStore();
+    const run = getRun(id);
+    const [focus, setFocus] = useState([]);
+    const [showJson, setShowJson] = useState(false);
+    const [copied, setCopied] = useState("");
+    const jsonRef = useRef(null);
+    useEffect(() => { setFocus([]); setShowJson(false); setCopied(""); }, [id]);
+    if (!run) return html`<div class="stack g16"><div class="err" role="alert">That run isn't in this browser anymore. Runs are stored locally, up to the latest 30.</div>
+      <div><button class="btn btn-outline" onClick=${() => open("history")}>Go to run history</button></div></div>`;
+    const base = run.baseline_run_id ? getRun(run.baseline_run_id) : null;
+    const done = TERMINAL.includes(run.status);
+    const baseDone = !run.baseline_run_id || (base && TERMINAL.includes(base.status));
+    const report = done && baseDone ? E.buildReport(run, base) : null;
+    const fault = run.fault_config;
+    const faultEvents = run.events.filter((e) => e.phase === "fault_injected");
+    const kindName = run.kind === "chaos" ? "Crash test" : run.kind === "replay" ? "Replay" : "Baseline";
+    const title = fault
+      ? `${FAULT_NAMES[fault.fault_type]} on ${fault.target_tool}, call ${fault.occurrence}${fault.max_injections > 1 ? `–${fault.occurrence + fault.max_injections - 1}` : ""}`
+      : run.kind === "replay" ? `Replay of ${shortId(run.replay_of)}` : "Clean baseline";
+
+    let headline, outcome = null;
+    if (!done) headline = run.kind === "chaos" ? "Crash test in progress" : "Run in progress";
+    else if (run.status === "ERROR") headline = "The test harness failed. This run says nothing about the agent.";
+    else if (run.status === "CANCELLED") headline = "Cancelled before a verdict.";
+    else if (run.kind === "chaos" && report && report.comparison) { outcome = OUTCOME[report.comparison.recovery_outcome]; headline = outcome[2]; }
+    else if (run.status === "PASSED") headline = "Every check passed.";
+    else { const n = (run.assertion_results || []).filter((a) => a.applicable && a.status !== "PASS").length; headline = `The agent missed ${n} check${n === 1 ? "" : "s"}.`; }
+
+    const replay = () => { const r = startRun({ kind: "replay", agent: run.agent_adapter, fault: run.fault_config, seed: run.seed, baseline_run_id: run.baseline_run_id, replay_of: run.run_id }, run.run_id); open(r.run_id); };
+    const cancel = () => { const c = store.cancels[run.run_id]; if (c) c.cancelled = true; };
+    const reportJson = report ? JSON.stringify(report, null, 2) : "";
+    const copy = () => {
+      const fallback = () => { setShowJson(true); setCopied("Copy isn't allowed here. The JSON is shown below, selected for you."); setTimeout(() => { const el = jsonRef.current; if (el) { const rng = document.createRange(); rng.selectNodeContents(el); const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(rng); } }, 50); };
+      try { navigator.clipboard.writeText(reportJson).then(() => setCopied("Copied to clipboard."), fallback); } catch (e) { fallback(); }
+    };
+    const original = run.replay_of ? getRun(run.replay_of) : null;
+
+    return html`<div class="stack g24">
+      <nav class="crumbs" aria-label="Breadcrumb"><button onClick=${() => open("history")}>Run history</button>${Ico.chev(false)}<span style="color:var(--ink)">${kindName} ${shortId(run.run_id)}</span></nav>
+      <header class="stack g16">
+        <div class="badges"><${StatusBadge} status=${run.status} />
+          <span class="badge t-outline"><span class="dot" style="background:var(--steel)"></span>Offline fixtures</span>
+          <span class="badge t-outline mono" style="font-weight:400">${run.agent_adapter}</span>
+          ${fault && html`<span class="badge t-inject">${Ico.zap()}${FAULT_NAMES[fault.fault_type]}</span>`}</div>
+        <h1 class="h-page" style="font-size:clamp(28px,4vw,36px);line-height:1.25">${title}</h1>
+      </header>
+
+      <section key=${headline} class="verdict verdict-in" aria-live="polite">
+        <div class="stack g16" style="min-width:0">
+          ${outcome && html`<span><span class=${cx("badge", outcome[0])}>${outcome[1]}</span></span>`}
+          <p class="verdict-h">${headline}</p>
+          <p class="verdict-sub">${humanReason(run.status_reason)}${run.failure_origin === "harness" ? " Fix the environment and run it again." : ""}</p>
+          ${original && done && html`<p class="verdict-sub">Replay of ${shortId(original.run_id)}: ${run.signature === original.signature ? "identical event signature to the original run." : "the event signature differs from the original run."}</p>`}
+        </div>
+        <div class="verdict-side">
+          <dl class="stats tnum" style="margin:0">
+            <div><dt>Checks</dt><dd>${run.score ? `${run.score.passed}/${run.score.applicable}` : "–"}</dd></div>
+            <div><dt>Tool calls</dt><dd>${done ? run.tool_calls : run.events.filter((e) => e.phase === "tool_call_started").length}</dd></div>
+            <div><dt>Duration</dt><dd>${ms(run.latency_ms)}</dd></div>
+          </dl>
+          <div>${!done ? html`<button class="btn btn-sm btn-band" onClick=${cancel}>Cancel run</button>`
+            : ["PASSED", "FAILED"].includes(run.status) && html`<button class="btn btn-sm btn-band" onClick=${replay}>${Ico.replay()}Replay from recording</button>`}</div>
+        </div>
+      </section>
+
+      ${faultEvents.length > 0 && html`<div class="callout">${Ico.zap()}<div class="stack g8">${faultEvents.map((f) => html`<p><span class="b">${f.message}</span> <span class="muted">at event ${f.sequence}, invocation ${shortId(f.invocation_id)}</span></p>`)}</div></div>`}
+
+      <div class=${cx("lanes", run.baseline_run_id && "two")}>
+        ${run.baseline_run_id && html`<${Timeline} events=${base ? base.events : []} title="Baseline" status=${base && html`<${StatusBadge} status=${base.status} />`} />`}
+        <${Timeline} events=${run.events} highlight=${focus} title=${run.kind === "chaos" ? "Crash test" : "Trace"} status=${html`<${StatusBadge} status=${run.status} />`} />
+      </div>
+
+      ${report ? html`<div class="grid-report">
+        <div class="stack g24" style="min-width:0">
+          ${report.comparison && html`<section class="box" style="padding:24px 24px 12px">
+            <h2 class="h-sec">Baseline compared with crash test</h2>
+            <p class="sub" style="margin-top:4px">${report.comparison.recovery_explanation}</p>
+            <div style="overflow-x:auto;margin-top:12px"><${Compare} c=${report.comparison} /></div>
+          </section>`}
+          <section class="box">
+            <div style="padding:24px 24px 12px"><h2 class="h-sec">Checks</h2>
+              ${report.score && html`<p class="sub tnum" style="margin-top:4px">${report.score.passed} of ${report.score.applicable} passed${report.score.failed ? `, ${report.score.failed} failed` : ""}${report.score.unknown ? `, ${report.score.unknown} unknown` : ""}. Unknown never counts as a pass.</p>`}</div>
+            <ul class="checks">${(report.assertions || []).filter((a) => a.applicable).map((a) => html`<li>
+              <span class=${cx("mark", "m-" + a.status)} aria-label=${a.status}>${a.status === "PASS" ? Ico.check() : a.status === "FAIL" ? Ico.x() : Ico.q()}</span>
+              <div style="flex:1;min-width:0"><p class="b" style="color:var(--ink-deep)">${a.title}</p><p class="sub" style="margin-top:2px;overflow-wrap:anywhere">${a.reason}</p></div>
+              ${a.evidence_sequences.length > 0 && html`<button class="chip-btn" onClick=${() => setFocus(a.evidence_sequences)}>Show in trace</button>`}
+            </li>`)}</ul>
+            ${report.score && html`<div class="small" style="border-top:1px solid var(--line-soft);padding:16px 24px">
+              ${(report.assertions || []).some((a) => !a.applicable) && html`<p>Not relevant to this fault: ${report.assertions.filter((a) => !a.applicable).map((a) => a.title.toLowerCase()).join(", ")}.</p>`}
+              <p style="margin-top:8px">${report.score.confidence_note}</p></div>`}
+          </section>
+          ${run.artifact && html`<details class="box art"><summary>Agent's final report ${Ico.chev(false)}</summary>
+            <pre class="raw" style="margin:0 24px 24px">${JSON.stringify(run.artifact, null, 2)}</pre></details>`}
+        </div>
+        <div class="rail">
+          <section class="box pad">
+            <h2 class="b" style="font-size:18px;color:var(--ink-deep)">What happened</h2>
+            <ul class="plain" style="color:var(--charcoal)">
+              ${report.root_cause.details.filter((d) => !CHECK_LINE.test(d)).map((d) => html`<li style="overflow-wrap:anywhere">${d}</li>`)}
+              ${report.root_cause.failed_assertions.length > 0 && html`<li class="b" style="color:var(--ink-deep)">${report.root_cause.failed_assertions.length} check${report.root_cause.failed_assertions.length === 1 ? "" : "s"} did not pass. The checks list shows each reason and where it shows up in the trace.</li>`}
+            </ul>
+          </section>
+          ${report.recovery_suggestions.length > 0 && html`<section class="tips">
+            <h2 class="b" style="font-size:18px;color:var(--ink-deep)">How to fix the agent</h2>
+            <ul class="plain">${report.recovery_suggestions.map((r) => html`<li><span class="mono small" style="display:block">${r.assertion_id}</span>${r.suggestion}</li>`)}</ul>
+          </section>`}
+          <section class="box pad">
+            <h2 class="b" style="font-size:18px;color:var(--ink-deep)">Report</h2>
+            <p class="sub" style="margin-top:4px">JSON with the run, fault, checks, comparison and fingerprint.</p>
+            <div class="stack g8" style="margin-top:16px">
+              <button class="btn btn-ink w-full" onClick=${copy}>Copy JSON report</button>
+              <button class="btn btn-ghost w-full" onClick=${() => setShowJson(!showJson)}>${showJson ? "Hide JSON" : "Show JSON"}</button>
+              ${copied && html`<p class="toast" role="status">${copied}</p>`}
+            </div>
+            <dl class="meta-grid tnum">
+              <dt>Signature</dt><dd class="mono">${report.determinism.signature}</dd>
+              <dt>Fingerprint</dt><dd class="mono">${report.report_fingerprint}</dd>
+              <dt>Fixture</dt><dd>${report.determinism.fixture_version}</dd>
+              <dt>Seed</dt><dd>${report.determinism.seed}</dd>
+            </dl>
+            <ul class="fine">${report.limitations.map((l) => html`<li>${l}</li>`)}</ul>
+          </section>
+        </div>
+      </div>
+      ${showJson && html`<section class="box"><div class="lane-h"><div class="lane-t">Report JSON</div><button class="link" onClick=${() => setShowJson(false)}>Hide</button></div>
+        <pre class="raw" ref=${jsonRef} style="margin:16px;max-height:520px">${reportJson}</pre></section>`}`
+      : done ? html`<p class="sub">Waiting for the baseline to finish before building the report</p>` : null}
+    </div>`;
+  }
+
+  const STATUS_TEXT = { PASS: "Passed", FAIL: "Failed", UNKNOWN: "Unknown", "N/A": "Not checked" };
+  function Compare({ c }) {
+    const rows = [
+      ["Tool calls", String(c.tool_calls.baseline), String(c.tool_calls.chaos), null],
+      ["Duration", ms(c.latency_ms.baseline), ms(c.latency_ms.chaos), null],
+      ["Report completeness", `${Math.round(c.completeness.baseline * 100)}%`, `${Math.round(c.completeness.chaos * 100)}%`, c.completeness.chaos < c.completeness.baseline],
+    ];
+    return html`<table class="cmp"><thead><tr><th>Measure</th><th class="r">Baseline</th><th class="r" style="padding-right:0">Crash test</th></tr></thead><tbody>
+      ${rows.map(([l, a, b, worse]) => html`<tr><td class="b">${l}</td><td class="r tnum" style="color:var(--charcoal)">${a}</td>
+        <td class="r tnum b" style=${"padding-right:0;color:" + (worse === null || a === b ? "var(--ink)" : worse ? "var(--fail-text)" : "var(--pass)")}>${b}</td></tr>`)}
+      ${c.assertions_changed.map((x) => html`<tr><td class="mono small" style="color:var(--ink)">${x.assertion_id}</td><td class="r" style="color:var(--charcoal)">${STATUS_TEXT[x.baseline] || x.baseline}</td>
+        <td class=${cx("r b", x.chaos === "PASS" ? "c-pass" : x.chaos === "FAIL" ? "c-fail" : "c-unknown")} style="padding-right:0">${STATUS_TEXT[x.chaos] || x.chaos}</td></tr>`)}
+    </tbody></table>`;
+  }
+
+  function History({ open }) {
+    const s = useStore();
+    const clear = () => { store.runs = store.runs.filter((r) => !TERMINAL.includes(r.status)); save(); notify(); };
+    return html`<div class="stack g40">
+      <header class="stack g12" style="max-width:768px">
+        <h1 class="h-page">Run history</h1>
+        <p class="lead">Every baseline, crash test and replay you ran in this browser, newest first. Runs stay on this device only.</p>
+      </header>
+      <${RunsTable} runs=${s.runs} open=${open} />
+      ${s.runs.length > 0 && html`<div><button class="btn btn-ghost btn-sm" onClick=${clear}>Clear finished runs</button></div>`}
+    </div>`;
+  }
+
+  // ---------- app ----------
+  function App() {
+    const [view, setView] = useState({ name: "new" });
+    const [cfg, setCfg] = useState({ agent: "scripted-robust", seed: 42, fault: null, baselineId: null });
+    useEffect(() => {
+      // Open in a working state: first visit seeds one clean baseline and one example crash test.
+      if (!store.runs.length) {
+        const b = startRun({ kind: "baseline", agent: "scripted-robust", seed: 42 });
+        b.example = true;
+        const nb = startRun({ kind: "baseline", agent: "scripted-naive", seed: 42 });
+        nb.example = true;
+        const c = startRun({ kind: "chaos", agent: "scripted-naive", seed: 42, fault: { fault_type: "malformed_json" }, baseline_run_id: nb.run_id });
+        c.example = true;
+        setCfg((s) => ({ ...s, baselineId: b.run_id }));
+      } else {
+        const b = store.runs.find((r) => r.kind === "baseline" && r.agent_adapter === "scripted-robust" && r.seed === 42 && ["PASSED", "FAILED"].includes(r.status));
+        if (b) setCfg((s) => ({ ...s, baselineId: b.run_id }));
+      }
+    }, []);
+    const open = (target) => {
+      setView(target === "history" ? { name: "history" } : target === "new" ? { name: "new" } : { name: "run", id: target });
+      window.scrollTo(0, 0);
+    };
+    return html`
+      <div class="nav"><div class="wrap nav-in">
+        <button class="brand" onClick=${() => open("new")}>${Ico.mark()}<span>ChaosMonkey AI</span></button>
+        <nav class="tabs" aria-label="Main">
+          <button class="pill-tab" aria-current=${view.name === "new" ? "page" : null} onClick=${() => open("new")}>New test</button>
+          <button class="pill-tab" aria-current=${view.name !== "new" ? "page" : null} onClick=${() => open("history")}>Run history</button>
+        </nav>
+        <div class="env"><span class="dot" style="background:var(--pass)"></span>Running in your browser, offline fixtures</div>
+      </div></div>
+      <div class="note"><div class="wrap"><span>Browser preview. Same agents, faults and checks as the app, running entirely in this page.</span>
+        <a href=${REPO} target="_blank" rel="noopener">Get the full app on GitHub</a></div></div>
+      <main class="wrap">
+        ${view.name === "new" && html`<${NewTest} open=${open} state=${cfg} setState=${setCfg} />`}
+        ${view.name === "history" && html`<${History} open=${open} />`}
+        ${view.name === "run" && html`<${RunPage} id=${view.id} open=${open} />`}
+      </main>
+      <footer><div class="wrap"><span>ChaosMonkey AI runs bundled agents against fictional fixtures. No third-party systems are contacted.</span><span>Preview build</span></div></footer>`;
+  }
+
+  load();
+  render(html`<${App} />`, document.getElementById("app"));
+})();
+</script>
